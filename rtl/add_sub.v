@@ -1,25 +1,25 @@
 // ============================================================================
-// ماژول: add_sub  (جمع/تفریق با فلگ)
+// Module: add_sub  (Adder/Subtractor with flag)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   همانطور که خودت گفتی، جدا ساختن جمع و تفریق کمی بی‌مزه است؛ این ماژول
-//   هر دو را با یک فلگ (sub_flag) انجام می‌دهد.
+// Description:
+//   As you suggested, building separate add and subtract blocks is a bit
+//   pointless; this module performs both using a single flag (sub_flag).
 //     sub_flag = 0  =>  result = a + b + cin
 //     sub_flag = 1  =>  result = a - b - cin
 //
-// پارامترها:
-//   WIDTH : عرض بیت عملوندها و نتیجه (پیش‌فرض 8)
+// Parameters:
+//   WIDTH : Bit width of the operands and result (default 8)
 //
-// ورودی‌ها:
-//   a        : عملوند اول (عرض WIDTH)
-//   b        : عملوند دوم (عرض WIDTH)
-//   sub_flag : انتخاب عملیات؛ 0 = جمع، 1 = تفریق
-//   cin      : رقم نقلی/قرض ورودی
+// Inputs:
+//   a        : First operand (WIDTH bits)
+//   b        : Second operand (WIDTH bits)
+//   sub_flag : Operation select; 0 = add, 1 = subtract
+//   cin      : Carry-in / borrow-in
 //
-// خروجی‌ها:
-//   result   : نتیجه‌ی جمع یا تفریق (عرض WIDTH)
-//   cout     : رقم نقلی/قرض خروجی
-//   overflow : سرریز علامت‌دار (بسته به عملیات)
+// Outputs:
+//   result   : Add or subtract result (WIDTH bits)
+//   cout     : Carry-out / borrow-out
+//   overflow : Signed overflow (depends on the operation)
 // ============================================================================
 module add_sub #(
     parameter WIDTH = 8
@@ -35,12 +35,12 @@ module add_sub #(
 
     always @(*) begin
         if (!sub_flag) begin
-            // حالت جمع
+            // Addition
             {cout, result} = {1'b0, a} + {1'b0, b} + cin;
             overflow = (a[WIDTH-1] == b[WIDTH-1]) &&
                        (result[WIDTH-1] != a[WIDTH-1]);
         end else begin
-            // حالت تفریق
+            // Subtraction
             {cout, result} = {1'b0, a} - {1'b0, b} - cin;
             overflow = (a[WIDTH-1] != b[WIDTH-1]) &&
                        (result[WIDTH-1] != a[WIDTH-1]);

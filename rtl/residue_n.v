@@ -1,23 +1,23 @@
 // ============================================================================
-// ماژول: residue_n  (شمارنده‌ی پیمانه‌ای / باقیمانده)
+// Module: residue_n  (Modulo-N counter / residue)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک شمارنده‌ی پیمانه‌ای (Modulo-N Counter) است که از 0 تا N-1 می‌شمارد و
-//   بعد از رسیدن به N-1 دوباره به صفر برمی‌گردد؛ یعنی خروجی همیشه «باقیمانده
-//   در پیمانه‌ی N» است. خروجی done هنگام قرار گرفتن روی N-1 فعال می‌شود.
+// Description:
+//   A modulo-N counter that counts from 0 to N-1 and wraps back to zero after
+//   N-1; therefore the output is always the residue modulo N. done is asserted
+//   while the counter is at N-1.
 //
-// پارامترها:
-//   N     : پیمانه‌ی شمارنده (پیش‌فرض 10)
-//   WIDTH : عرض خروجی؛ به‌صورت خودکار ceil(log2(N)) (پیش‌فرض محاسبه‌شده)
+// Parameters:
+//   N     : Counter modulus (default 10)
+//   WIDTH : Output width; automatically ceil(log2(N))
 //
-// ورودی‌ها:
-//   clk : کلاک
-//   rst : ریست غیرهمگام (فعال سطح بالا)
-//   en  : فعال‌کننده‌ی شمارش
+// Inputs:
+//   clk : Clock
+//   rst : Asynchronous reset, active high
+//   en  : Count enable
 //
-// خروجی‌ها:
-//   value : مقدار جاری شمارنده (0 تا N-1)
-//   done  : وقتی value == N-1 باشد یک می‌شود (رسیدن به آخرین حالت)
+// Outputs:
+//   value : Current counter value (0 to N-1)
+//   done  : Asserted when value == N-1 (last state reached)
 // ============================================================================
 module residue_n #(
     parameter N     = 10,
@@ -37,7 +37,7 @@ module residue_n #(
             value <= {WIDTH{1'b0}};
         end else if (en) begin
             if (value == N - 1)
-                value <= {WIDTH{1'b0}};   // برگشت به صفر (پیمانه)
+                value <= {WIDTH{1'b0}};   // Wrap back to zero (modulo N)
             else
                 value <= value + 1'b1;
         end

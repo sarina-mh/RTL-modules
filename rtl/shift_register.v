@@ -1,31 +1,31 @@
 // ============================================================================
-// ماژول: shift_register  (شیفت رجیستر)
+// Module: shift_register  (Shift register)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک شیفت رجیستر با کنترل‌های خواسته‌شده است:
-//     init     : مقدار رجیستر را به INIT_VALUE برمی‌گرداند (مقداردهی اولیه)
-//     load_reg : بارگذاری موازی از parallel_in
-//     shift_en : فعال‌کردن شیفت (با هر کلاک یک بیت شیفت می‌دهد)
-//   اولویت‌ها: rst > init > load_reg > shift_en
-//   جهت شیفت با پارامتر DIR انتخاب می‌شود.
+// Description:
+//   A shift register with the requested controls:
+//     init     : loads INIT_VALUE into the register (initialization)
+//     load_reg : parallel load from parallel_in
+//     shift_en : enables shifting (one bit per clock)
+//   Priority: rst > init > load_reg > shift_en
+//   The shift direction is selected by the DIR parameter.
 //
-// پارامترها:
-//   WIDTH      : عرض رجیستر (پیش‌فرض 8)
-//   DIR        : 0 = شیفت به راست، 1 = شیفت به چپ (پیش‌فرض 0)
-//   INIT_VALUE : مقداری که با init در رجیستر قرار می‌گیرد (پیش‌فرض 0)
+// Parameters:
+//   WIDTH      : Register width (default 8)
+//   DIR        : 0 = shift right, 1 = shift left (default 0)
+//   INIT_VALUE : Value loaded by init (default 0)
 //
-// ورودی‌ها:
-//   clk         : کلاک
-//   rst         : ریست غیرهمگام (فعال سطح بالا)
-//   shift_en    : فعال‌کننده‌ی شیفت
-//   init        : مقداردهی اولیه
-//   load_reg    : بارگذاری موازی
-//   serial_in   : بیتی که در هر شیفت وارد رجیستر می‌شود
-//   parallel_in : داده‌ی بارگذاری موازی (عرض WIDTH)
+// Inputs:
+//   clk         : Clock
+//   rst         : Asynchronous reset, active high
+//   shift_en    : Shift enable
+//   init        : Initialize the register
+//   load_reg    : Parallel load enable
+//   serial_in   : Bit shifted into the register on each shift
+//   parallel_in : Parallel load data (WIDTH bits)
 //
-// خروجی‌ها:
-//   q         : مقدار رجیستر (عرض WIDTH)
-//   serial_out: بیتی که از سمت مقابل خارج می‌شود
+// Outputs:
+//   q          : Register value (WIDTH bits)
+//   serial_out : Bit shifted out from the opposite side
 // ============================================================================
 module shift_register #(
     parameter WIDTH      = 8,
@@ -43,7 +43,7 @@ module shift_register #(
     output wire             serial_out
 );
 
-    // بیت خروجی سریال از سمتی که شیفت به آن سمت است.
+    // Serial output comes from the side the register shifts towards.
     assign serial_out = (DIR == 0) ? q[0] : q[WIDTH-1];
 
     always @(posedge clk or posedge rst) begin
@@ -55,9 +55,9 @@ module shift_register #(
             q <= parallel_in;
         end else if (shift_en) begin
             if (DIR == 0)
-                q <= {serial_in, q[WIDTH-1:1]};   // شیفت راست
+                q <= {serial_in, q[WIDTH-1:1]};   // Shift right
             else
-                q <= {q[WIDTH-2:0], serial_in};   // شیفت چپ
+                q <= {q[WIDTH-2:0], serial_in};   // Shift left
         end
     end
 

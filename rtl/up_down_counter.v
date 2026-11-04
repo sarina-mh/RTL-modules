@@ -1,32 +1,32 @@
 // ============================================================================
-// ماژول: up_down_counter  (شمارنده‌ی بالا/پایین)
+// Module: up_down_counter  (Up/down counter)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک شمارنده‌ی بالا/پایین با محدوده‌ی قابل تنظیم است.
-//   - count_up = 1 : به سمت بالا می‌شمارد
-//   - count_up = 0 : به سمت پایین می‌شمارد
-//   - count_en = 1 : شمارش فعال است
-//   - serial_in    : رقم نقلی/ورودی سریالی برای زنجیره‌کردن شمارنده‌ها
-//                    (اگر بخواهی شمارنده به‌تنهایی کار کند آن را 1 بگذار)
-//   - done         : رسیدن به آخرین حالت (در حالت بالا: MAX_VALUE و در حالت
-//                    پایین: MIN_VALUE)
-//   در رسیدن به مرز، شمارنده دور می‌زند (Wrap).
+// Description:
+//   An up/down counter with a configurable range.
+//   - count_up = 1 : counts up
+//   - count_up = 0 : counts down
+//   - count_en = 1 : counting is enabled
+//   - serial_in    : Carry-in / serial enable used to chain counters
+//                    (tie it to 1 for standalone operation)
+//   - done         : Last state reached (MAX_VALUE when counting up,
+//                    MIN_VALUE when counting down)
+//   The counter wraps around at the boundaries.
 //
-// پارامترها:
-//   WIDTH     : عرض شمارنده (پیش‌فرض 8)
-//   MIN_VALUE : کمترین مقدار (پیش‌فرض 0)
-//   MAX_VALUE : بیشترین مقدار (پیش‌فرض 2^WIDTH - 1)
+// Parameters:
+//   WIDTH     : Counter width (default 8)
+//   MIN_VALUE : Minimum value (default 0)
+//   MAX_VALUE : Maximum value (default 2^WIDTH - 1)
 //
-// ورودی‌ها:
-//   clk       : کلاک
-//   rst       : ریست غیرهمگام (فعال سطح بالا) که مقدار را MIN_VALUE می‌کند
-//   count_en  : فعال‌کننده‌ی شمارش
-//   count_up  : جهت شمارش؛ 1 = بالا، 0 = پایین
-//   serial_in : رقم نقلی ورودی / فعال‌کننده‌ی سریالی
+// Inputs:
+//   clk       : Clock
+//   rst       : Asynchronous reset, active high (loads MIN_VALUE)
+//   count_en  : Count enable
+//   count_up  : Count direction; 1 = up, 0 = down
+//   serial_in : Carry-in / serial enable
 //
-// خروجی‌ها:
-//   value : مقدار جاری شمارنده
-//   done  : رسیدن به مرز شمارش
+// Outputs:
+//   value : Current counter value
+//   done  : Counting boundary reached
 // ============================================================================
 module up_down_counter #(
     parameter WIDTH     = 8,
@@ -42,7 +42,7 @@ module up_down_counter #(
     output wire             done
 );
 
-    // done بسته به جهت شمارش، رسیدن به سقف یا کف را نشان می‌دهد.
+    // done reflects reaching the ceiling or floor depending on direction.
     assign done = count_up ? (value == MAX_VALUE) : (value == MIN_VALUE);
 
     always @(posedge clk or posedge rst) begin
@@ -51,12 +51,12 @@ module up_down_counter #(
         end else if (count_en && serial_in) begin
             if (count_up) begin
                 if (value >= MAX_VALUE)
-                    value <= MIN_VALUE;   // دور زدن در سقف
+                    value <= MIN_VALUE;   // Wrap at the ceiling
                 else
                     value <= value + 1'b1;
             end else begin
                 if (value <= MIN_VALUE)
-                    value <= MAX_VALUE;   // دور زدن در کف
+                    value <= MAX_VALUE;   // Wrap at the floor
                 else
                     value <= value - 1'b1;
             end

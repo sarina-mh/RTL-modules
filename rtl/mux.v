@@ -1,37 +1,37 @@
 // ============================================================================
-// ماژول: mux  (مالتی‌پلکسر)
+// Module: mux  (Multiplexer)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک مالتی‌پلکسر پارامتریک است. N ورودی هر کدام با عرض WIDTH دارد و با
-//   سیگنال sel یکی از آن‌ها را به خروجی وصل می‌کند. ورودی‌ها در یک بردار
-//   به هم چسبیده‌اند (in[0] در بیت‌های پایین، in[N-1] در بیت‌های بالا).
+// Description:
+//   Parameterized multiplexer. It has N inputs, each WIDTH bits wide, and
+//   connects one of them to the output based on sel. The inputs are packed
+//   into a single vector (input 0 in the lowest bits, input N-1 in the highest).
 //
-// پارامترها:
-//   WIDTH     : عرض هر ورودی/خروجی (پیش‌فرض 8)
-//   N         : تعداد ورودی‌ها (پیش‌فرض 4)
-//   SEL_WIDTH : عرض سیگنال انتخاب؛ به‌صورت خودکار ceil(log2(N)) می‌شود
+// Parameters:
+//   WIDTH     : Width of each input/output (default 8)
+//   N         : Number of inputs (default 4)
+//   SEL_WIDTH : Select width; automatically ceil(log2(N))
 //
-// ورودی‌ها:
-//   in  : بردار ورودی‌ها، عرض N*WIDTH
-//   sel : شماره‌ی ورودی انتخاب‌شده، عرض SEL_WIDTH
+// Inputs:
+//   in  : Packed input vector, N*WIDTH bits
+//   sel : Index of the selected input, SEL_WIDTH bits
 //
-// خروجی‌ها:
-//   out : ورودی انتخاب‌شده، عرض WIDTH
+// Outputs:
+//   out : Selected input, WIDTH bits
 // ============================================================================
 module mux #(
     parameter WIDTH     = 8,
     parameter N         = 4,
     parameter SEL_WIDTH = (N <= 2) ? 1 : $clog2(N)
 )(
-    input  wire [N*WIDTH-1:0] in,
+    input  wire [N*WIDTH-1:0]   in,
     input  wire [SEL_WIDTH-1:0] sel,
-    output reg  [WIDTH-1:0] out
+    output reg  [WIDTH-1:0]     out
 );
 
     integer i;
 
     always @(*) begin
-        // مقدار پیش‌فرض صفر تا در صورت نامعتبر بودن sel خروجی معلق نماند.
+        // Default to zero so the output is never floating for an invalid sel.
         out = {WIDTH{1'b0}};
         for (i = 0; i < N; i = i + 1) begin
             if (sel == i)

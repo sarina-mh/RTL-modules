@@ -1,30 +1,30 @@
 // ============================================================================
-// ماژول: universal_shift  (شیفت رجیستر همه‌کاره)
+// Module: universal_shift  (Universal shift register)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک شیفت رجیستر همه‌کاره است که با سیگنال mode چهار عملیات انجام می‌دهد:
-//     mode = 00 : نگه‌داشتن مقدار (Hold)
-//     mode = 01 : شیفت به راست (Shift Right)
-//     mode = 10 : شیفت به چپ  (Shift Left)
-//     mode = 11 : بارگذاری موازی (Parallel Load)
-//   توجه: در Verilog عملگرهای >> و << هم همین شیفت را انجام می‌دهند، ولی
-//   این ماژول نسخه‌ی سخت‌افزاری و قابل سنتز با کنترل کامل است.
+// Description:
+//   A universal shift register that performs four operations selected by mode:
+//     mode = 00 : hold
+//     mode = 01 : shift right
+//     mode = 10 : shift left
+//     mode = 11 : parallel load
+//   Note: Verilog's >> and << operators also perform shifts, but this module
+//   is the synthesizable hardware version with full control.
 //
-// پارامترها:
-//   WIDTH : عرض رجیستر (پیش‌فرض 8)
+// Parameters:
+//   WIDTH : Register width (default 8)
 //
-// ورودی‌ها:
-//   clk          : کلاک
-//   rst          : ریست همگام/غیرهمگام (اینجا غیرهمگام، فعال سطح بالا)
-//   mode         : انتخاب عملیات (2 بیت)
-//   serial_right : بیتی که هنگام شیفت راست از سمت MSB وارد می‌شود
-//   serial_left  : بیتی که هنگام شیفت چپ از سمت LSB وارد می‌شود
-//   parallel_in  : مقدار بارگذاری موازی (عرض WIDTH)
+// Inputs:
+//   clk          : Clock
+//   rst          : Asynchronous reset, active high
+//   mode         : Operation select (2 bits)
+//   serial_right : Bit shifted in at the MSB side during a right shift
+//   serial_left  : Bit shifted in at the LSB side during a left shift
+//   parallel_in  : Parallel load value (WIDTH bits)
 //
-// خروجی‌ها:
-//   q               : مقدار رجیستر (عرض WIDTH)
-//   serial_out_right: بیتی که هنگام شیفت راست از LSB خارج می‌شود
-//   serial_out_left : بیتی که هنگام شیفت چپ از MSB خارج می‌شود
+// Outputs:
+//   q                : Register value (WIDTH bits)
+//   serial_out_right : Bit shifted out at the LSB side during a right shift
+//   serial_out_left  : Bit shifted out at the MSB side during a left shift
 // ============================================================================
 module universal_shift #(
     parameter WIDTH = 8
@@ -48,10 +48,10 @@ module universal_shift #(
             q <= {WIDTH{1'b0}};
         end else begin
             case (mode)
-                2'b00: q <= q;                                  // Hold
-                2'b01: q <= {serial_right, q[WIDTH-1:1]};       // Shift Right
-                2'b10: q <= {q[WIDTH-2:0], serial_left};        // Shift Left
-                2'b11: q <= parallel_in;                        // Parallel Load
+                2'b00: q <= q;                              // Hold
+                2'b01: q <= {serial_right, q[WIDTH-1:1]};   // Shift right
+                2'b10: q <= {q[WIDTH-2:0], serial_left};    // Shift left
+                2'b11: q <= parallel_in;                    // Parallel load
             endcase
         end
     end

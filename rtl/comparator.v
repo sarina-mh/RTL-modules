@@ -1,18 +1,18 @@
 // ============================================================================
-// ماژول: comparator  (مقایسه‌کننده)
+// Module: comparator  (Comparator)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   دو عدد a و b را مقایسه می‌کند و همه‌ی خروجی‌های ممکن مقایسه را به‌طور
-//   هم‌زمان تولید می‌کند (ترکیبی).
+// Description:
+//   Compares a and b and produces every possible comparison output at the same
+//   time (combinational).
 //
-// پارامترها:
-//   WIDTH : عرض عملوندها (پیش‌فرض 8)
+// Parameters:
+//   WIDTH : Operand width (default 8)
 //
-// ورودی‌ها:
-//   a : عملوند اول  (عرض WIDTH)
-//   b : عملوند دوم  (عرض WIDTH)
+// Inputs:
+//   a : First operand  (WIDTH bits)
+//   b : Second operand (WIDTH bits)
 //
-// خروجی‌ها:
+// Outputs:
 //   eq : a == b
 //   ne : a != b
 //   gt : a >  b

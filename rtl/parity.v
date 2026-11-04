@@ -1,24 +1,24 @@
 // ============================================================================
-// ماژول: parity  (تولید/بررسی بیت توازن)
+// Module: parity  (Parity generator / checker)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   این ماژول هم می‌تواند بیت توازن (Parity) تولید کند و هم آن را بررسی کند.
-//   - در حالت تولید (check_mode = 0): بیت توازن مربوط به data را می‌سازد.
-//   - در حالت بررسی (check_mode = 1): بیت توازن دریافتی (parity_in) را با
-//     مقدار محاسبه‌شده مقایسه می‌کند و در صورت ناسازگاری error = 1 می‌شود.
+// Description:
+//   This module can both generate and check a parity bit.
+//   - Generate mode (check_mode = 0): produces the parity bit for data.
+//   - Check mode (check_mode = 1): compares the received parity bit
+//     (parity_in) with the computed one and asserts error on a mismatch.
 //
-// پارامترها:
-//   WIDTH : عرض داده (پیش‌فرض 8)
-//   EVEN  : 1 = توازن زوج، 0 = توازن فرد (پیش‌فرض 1)
+// Parameters:
+//   WIDTH : Data width (default 8)
+//   EVEN  : 1 = even parity, 0 = odd parity (default 1)
 //
-// ورودی‌ها:
-//   data       : داده‌ی ورودی (عرض WIDTH)
-//   parity_in  : بیت توازن دریافتی (برای حالت بررسی)
-//   check_mode : 0 = تولید، 1 = بررسی
+// Inputs:
+//   data       : Input data (WIDTH bits)
+//   parity_in  : Received parity bit (used in check mode)
+//   check_mode : 0 = generate, 1 = check
 //
-// خروجی‌ها:
-//   parity_out : بیت توازن تولیدشده
-//   error      : خطای توازن؛ فقط در حالت بررسی معنی دارد
+// Outputs:
+//   parity_out : Generated parity bit
+//   error      : Parity error; only meaningful in check mode
 // ============================================================================
 module parity #(
     parameter WIDTH = 8,
@@ -31,7 +31,7 @@ module parity #(
     output wire             error
 );
 
-    // XOR تمام بیت‌ها: برای توازن زوج، اگر تعداد یک‌ها فرد باشد 1 می‌شود.
+    // XOR of all bits: for even parity this is 1 when the number of ones is odd.
     wire xor_all;
 
     assign xor_all    = ^data;

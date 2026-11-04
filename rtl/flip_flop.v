@@ -1,24 +1,24 @@
 // ============================================================================
-// ماژول: flip_flop  (فلیپ‌فلاپ D)
+// Module: flip_flop  (D flip-flop)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک فلیپ‌فلاپ D با عرض پارامتریک است. در لبه‌ی بالارونده‌ی کلاک، اگر
-//   enable فعال باشد مقدار d در q ذخیره می‌شود. ریست غیرهمگام و فعال در
-//   سطح پایین (rst_n) است و خروجی مکمل هم دارد.
+// Description:
+//   A parameterized-width D flip-flop. On the rising clock edge, if enable is
+//   asserted, d is stored into q. The reset is asynchronous and active low
+//   (rst_n). A complemented output is also provided.
 //
-// پارامترها:
-//   WIDTH       : عرض داده و خروجی (پیش‌فرض 1)
-//   RESET_VALUE : مقداری که هنگام ریست در q قرار می‌گیرد (پیش‌فرض 0)
+// Parameters:
+//   WIDTH       : Data/output width (default 1)
+//   RESET_VALUE : Value loaded into q during reset (default 0)
 //
-// ورودی‌ها:
-//   clk   : کلاک
-//   rst_n : ریست غیرهمگام، فعال سطح پایین
-//   en    : فعال‌کننده‌ی ذخیره‌سازی
-//   d     : داده‌ی ورودی (عرض WIDTH)
+// Inputs:
+//   clk   : Clock
+//   rst_n : Asynchronous reset, active low
+//   en    : Storage enable
+//   d     : Input data (WIDTH bits)
 //
-// خروجی‌ها:
-//   q     : خروجی (عرض WIDTH)
-//   q_bar : مکمل خروجی (عرض WIDTH)
+// Outputs:
+//   q     : Output (WIDTH bits)
+//   q_bar : Complemented output (WIDTH bits)
 // ============================================================================
 module flip_flop #(
     parameter WIDTH       = 1,

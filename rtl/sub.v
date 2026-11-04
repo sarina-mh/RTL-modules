@@ -1,23 +1,22 @@
 // ============================================================================
-// ماژول: sub  (تفریق‌کننده)
+// Module: sub  (Subtractor)
 // ----------------------------------------------------------------------------
-// کار کلی:
-//   یک تفریق‌کننده‌ی ترکیبی با عرض قابل تنظیم است.
-//   diff = a - b - bin  را حساب می‌کند و رقم قرض خروجی (bout) و سرریز
-//   علامت‌دار (overflow) را هم تولید می‌کند.
+// Description:
+//   Combinational subtractor with configurable width.
+//   Computes diff = a - b - bin and also produces borrow-out and signed overflow.
 //
-// پارامترها:
-//   WIDTH : عرض بیت ورودی‌ها و خروجی (پیش‌فرض 8)
+// Parameters:
+//   WIDTH : Bit width of the operands and result (default 8)
 //
-// ورودی‌ها:
-//   a   : عملوند اول  (عرض WIDTH)
-//   b   : عملوند دوم  (عرض WIDTH)
-//   bin : رقم قرض ورودی (Borrow-In)
+// Inputs:
+//   a   : First operand  (WIDTH bits)
+//   b   : Second operand (WIDTH bits)
+//   bin : Borrow-in
 //
-// خروجی‌ها:
-//   diff     : حاصل تفریق (عرض WIDTH)
-//   bout     : رقم قرض خروجی (Borrow-Out)
-//   overflow : سرریز علامت‌دار
+// Outputs:
+//   diff     : Difference result (WIDTH bits)
+//   bout     : Borrow-out
+//   overflow : Signed overflow
 // ============================================================================
 module sub #(
     parameter WIDTH = 8
@@ -30,7 +29,7 @@ module sub #(
     output wire             overflow
 );
 
-    // یک بیت اضافه برای نگه‌داری رقم قرض.
+    // One extra bit is used so the borrow-out is not lost.
     wire [WIDTH:0] result;
 
     assign result = {1'b0, a} - {1'b0, b} - bin;
@@ -38,8 +37,8 @@ module sub #(
     assign diff = result[WIDTH-1:0];
     assign bout = result[WIDTH];
 
-    // سرریز علامت‌دار در تفریق: دو عملوند علامت متفاوت داشته باشند و
-    // نتیجه هم علامتش با عملوند اول فرق کند.
+    // Signed overflow in subtraction: operands have different signs and the
+    // result sign differs from the first operand's sign.
     assign overflow = (a[WIDTH-1] != b[WIDTH-1]) &&
                       (diff[WIDTH-1] != a[WIDTH-1]);
 
