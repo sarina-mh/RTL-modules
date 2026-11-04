@@ -1,0 +1,92 @@
+[
+  {
+    "name": "combinational",
+    "passed": true,
+    "seconds": 28.89,
+    "output": [
+      "PASS combinational W=1 N=1 cases=4",
+      "PASS combinational W=4 N=3 cases=256",
+      "PASS combinational W=16 N=8 cases=24000",
+      "PASS combinational W=8 N=5 cases=24000",
+      "PASS tb_combinational"
+    ]
+  },
+  {
+    "name": "sequential",
+    "passed": true,
+    "seconds": 30.47,
+    "output": [
+      "PASS sequential/memory/FIFO W=8 depth=8 latency=2 cycles=1800",
+      "PASS sequential/memory/FIFO W=8 depth=3 latency=3 cycles=1800",
+      "PASS sequential/memory/FIFO W=1 depth=1 latency=1 cycles=1800",
+      "PASS sequence P=1 overlap=1 cycles=2000",
+      "PASS sequence P=4 overlap=0 cycles=2000",
+      "PASS sequence P=4 overlap=1 cycles=2000",
+      "PASS tb_sequential"
+    ]
+  },
+  {
+    "name": "algorithms",
+    "passed": true,
+    "seconds": 33.41,
+    "output": [
+      "PASS sorts/extrema/array_sum W=1 N=1 signed=0 cases=200",
+      "PASS sorts/extrema/array_sum W=13 N=5 signed=1 cases=200",
+      "PASS sorts/extrema/array_sum W=8 N=8 signed=0 cases=200",
+      "PASS tb_algorithms: 4096 GCD/multiply/divide transactions"
+    ]
+  },
+  {
+    "name": "floating_point",
+    "passed": true,
+    "seconds": 41.84,
+    "output": [
+      "PASS floating_point E=3 F=2 vectors=4096 operations=4 stalls=1885",
+      "PASS floating_point E=8 F=23 vectors=16676 operations=4 stalls=7671",
+      "PASS floating_point E=5 F=10 vectors=70308 operations=4 stalls=32350",
+      "PASS tb_floating_point"
+    ]
+  },
+  {
+    "name": "sorting",
+    "passed": true,
+    "seconds": 40.43,
+    "output": [
+      "PASS sorting W=1 N=1 signed=0 arrays=100 methods=18 extra_configs=2",
+      "PASS sorting W=4 N=4 signed=1 arrays=100 methods=18 extra_configs=2",
+      "PASS sorting W=4 N=5 signed=0 arrays=100 methods=18 extra_configs=2",
+      "PASS sorting W=8 N=8 signed=0 arrays=100 methods=18 extra_configs=2",
+      "PASS sorting W=8 N=8 signed=1 arrays=100 methods=18 extra_configs=2",
+      "PASS tb_sorting"
+    ]
+  },
+  {
+    "name": "numerical",
+    "passed": true,
+    "seconds": 49.98,
+    "output": [
+      "PASS DFT/FFT N=1 Q=12 inverse=0 cases=24 max_error_LSB=0 tolerance=12",
+      "PASS Fourier series H=0 Q=12 phases=64 max_error_LSB=0",
+      "PASS Fourier series H=3 Q=20 phases=64 max_error_LSB=3",
+      "PASS DFT/FFT N=4 Q=12 inverse=1 cases=24 max_error_LSB=1 tolerance=24",
+      "PASS Fourier series H=8 Q=12 phases=64 max_error_LSB=5",
+      "PASS DFT/FFT N=8 Q=20 inverse=0 cases=24 max_error_LSB=4 tolerance=40",
+      "PASS Taylor/exp W=32 Q=20 cases=260 max_error_LSB=29 tolerance=64",
+      "PASS Taylor/exp W=16 Q=12 cases=260 max_error_LSB=5 tolerance=64",
+      "PASS DFT/FFT N=16 Q=12 inverse=0 cases=24 max_error_LSB=10 tolerance=72",
+      "PASS DFT/FFT N=64 Q=20 inverse=0 cases=24 max_error_LSB=38 tolerance=264",
+      "PASS tb_numerical"
+    ]
+  },
+  {
+    "name": "exam_algorithms",
+    "passed": true,
+    "seconds": 30.57,
+    "output": [
+      "PASS exam arrays W=1 N=1 signed=0 cases=160 modules=8",
+      "PASS exam arrays W=8 N=5 signed=1 cases=160 modules=8",
+      "PASS exam arrays W=8 N=8 signed=0 cases=160 modules=8",
+      "PASS tb_exam_algorithms scalar_cases=1200 modules=4"
+    ]
+  }
+]

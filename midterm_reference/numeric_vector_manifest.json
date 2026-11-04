@@ -1,0 +1,82 @@
+[
+  {
+    "kind": "taylor/exp",
+    "w": 16,
+    "q": 12,
+    "cases": 260,
+    "tolerance_lsb": 64
+  },
+  {
+    "kind": "taylor/exp",
+    "w": 32,
+    "q": 20,
+    "cases": 260,
+    "tolerance_lsb": 64
+  },
+  {
+    "kind": "DFT/FFT",
+    "n": 1,
+    "q": 12,
+    "inverse": 0,
+    "cases": 24,
+    "tolerance_lsb": 12
+  },
+  {
+    "kind": "DFT/FFT",
+    "n": 4,
+    "q": 12,
+    "inverse": 1,
+    "cases": 24,
+    "tolerance_lsb": 24
+  },
+  {
+    "kind": "DFT/FFT",
+    "n": 8,
+    "q": 20,
+    "inverse": 0,
+    "cases": 24,
+    "tolerance_lsb": 40
+  },
+  {
+    "kind": "DFT/FFT",
+    "n": 16,
+    "q": 12,
+    "inverse": 0,
+    "cases": 24,
+    "tolerance_lsb": 72
+  },
+  {
+    "kind": "DFT/FFT",
+    "n": 64,
+    "q": 20,
+    "inverse": 0,
+    "cases": 24,
+    "tolerance_lsb": 264
+  },
+  {
+    "kind": "Fourier series",
+    "harmonics": 0,
+    "q": 12,
+    "cases": 64,
+    "tolerance_lsb": 4
+  },
+  {
+    "kind": "Fourier series",
+    "harmonics": 3,
+    "q": 20,
+    "cases": 64,
+    "tolerance_lsb": 16
+  },
+  {
+    "kind": "Fourier series",
+    "harmonics": 8,
+    "q": 12,
+    "cases": 64,
+    "tolerance_lsb": 36
+  },
+  {
+    "kind": "exam_scalar",
+    "cases": 1200,
+    "width": 16
+  }
+]

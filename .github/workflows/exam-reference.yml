@@ -1,0 +1,46 @@
+name: Exam reference RTL
+on:
+  push:
+    paths:
+      - 'midterm_reference/**'
+      - '.github/workflows/exam-reference.yml'
+  pull_request:
+    paths:
+      - 'midterm_reference/**'
+      - '.github/workflows/exam-reference.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator g++ make
+          verilator --version
+      - name: Run seven suites
+        run: python3 midterm_reference/run_tests.py
+      - name: Strict Verilog-2005 lint
+        run: python3 midterm_reference/check_lint.py
+      - name: Render report and package verified sources
+        run: |
+          python3 midterm_reference/write_report.py
+          python3 midterm_reference/package_reference.py
+      - name: Preserve verification output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exam-reference-verification
+          path: |
+            midterm_reference/results.json
+            midterm_reference/lint_results.json
+            midterm_reference/*manifest.json
+            midterm_reference/TEST_REPORT.md
+            midterm_reference/build/*.txt
+            midterm_reference.zip

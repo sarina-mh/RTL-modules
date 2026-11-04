@@ -1,5 +1,33 @@
 # RTL Modules
 
+## Extended exam reference (84 modules)
+
+The [midterm_reference](midterm_reference/README.md) directory adds a separately
+tested library with one named file per module:
+
+- [Searchable module index](midterm_reference/MODULE_INDEX.md), including `fp_compare`,
+  accumulator/MAC, FP16/FP32 arithmetic and the four FP16 stream wrappers.
+- [18 sorting algorithms and exam patterns](midterm_reference/STUDY_GUIDE.md),
+  searches, prefix sums, dot/matrix products, Horner evaluation, integer power,
+  factorial, Fibonacci, integer square root and convolution.
+- [Taylor series, exp, Fourier series, DFT and radix-2 FFT/IFFT](midterm_reference/NUMERICAL.md),
+  with fixed-point domains, precision and saturation documented.
+- [Verification report](midterm_reference/TEST_REPORT.md) and seven repeatable suites.
+
+These modules use **synchronous active-low `rst_n`** and have their own interfaces.
+Compile this directory as a separate library: module names overlap with the
+original `rtl/` modules below. Existing root-level RTL/testbench interfaces are
+preserved. Run the extension with:
+
+```bash
+python3 midterm_reference/run_tests.py
+python3 midterm_reference/check_lint.py
+```
+
+GitHub Actions runs these checks for updates to the extension. The original
+library documentation follows.
+
+
 A collection of parameterized, synthesizable Verilog modules for digital-design
 and RTL courses. The library covers arithmetic building blocks, sequential
 building blocks, and array algorithms (sorting, max/min, binary search).
