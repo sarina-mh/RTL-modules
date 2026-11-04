@@ -69,7 +69,12 @@ module seq_check #(parameter W=8,D=3,L=3)(output bit finished=0);
                     for(k=L-1;k>0;k--)begin pipe_data[k]=pipe_data[k-1];pipe_valid[k]=pipe_valid[k-1];end
                     pipe_data[0]=d;pipe_valid[0]=valid;
                 end
-                if(pop&&fifo.size()>0)removed=fifo.pop_front();
+                if(pop&&fifo.size()>0)begin
+                    // Use the return value: old Verilator versions can remove
+                    // a pop whose assigned return is otherwise never read.
+                    removed=fifo.pop_front();
+                    if(removed!==int'(fdata))$fatal(1,"FIFO popped word");
+                end
                 if(push&&fifo.size()<D)fifo.push_back(d);
             end
             // Memories have no reset and retain data across system reset.
@@ -102,24 +107,36 @@ module pattern_check #(parameter P=4,parameter [P-1:0] PAT=4'b1011,parameter OVE
     logic clk=0;always #5 clk=~clk;
     logic rst_n=0,valid=0,bit_in=0;wire mealy,moore;
     sequence_detector #(P,PAT,OVERLAP) dut(clk,rst_n,valid,bit_in,mealy,moore);
-    bit history[$],expected;int t,k,discard;
+    bit expected;int t,k,prefix_length=0,next_prefix;
+    // Independent prefix/suffix reference, avoiding queue side-effect issues
+    // in older simulators. Unlike the DUT this tracks a matching prefix state.
+    function automatic integer advance_prefix(input integer current,input bit value);
+        reg [P:0] stream;integer i,length;bit is_match;
+        begin
+            stream=0;
+            for(i=0;i<current;i++)stream[current-i]=PAT[P-1-i];
+            stream[0]=value;advance_prefix=0;
+            for(length=1;length<=P;length++)if(length<=current+1)begin
+                is_match=1;
+                for(i=0;i<length;i++)if(stream[i]!=PAT[P-length+i])is_match=0;
+                if(is_match)advance_prefix=length;
+            end
+        end
+    endfunction
     initial begin
         @(posedge clk);#1;
         for(t=0;t<2000;t++)begin
             @(negedge clk);rst_n=(t!=999);valid=$urandom_range(0,1);bit_in=$urandom_range(0,1);
             expected=0;
             if(rst_n&&valid)begin
-                history.push_back(bit_in);
-                if(history.size()>P)discard=history.pop_front();
-                if(history.size()==P)begin
-                    expected=1;for(k=0;k<P;k++)if(history[k]!=PAT[P-1-k])expected=0;
-                end
+                next_prefix=advance_prefix(prefix_length,bit_in);
+                expected=(next_prefix==P);prefix_length=next_prefix;
             end
             #1;
             // A synchronous reset does not gate combinational Mealy output.
-            if(rst_n&&mealy!==expected)$fatal(1,"Mealy P=%0d overlap=%0d t=%0d valid=%b input=%b expected=%b got=%b reference=%p",P,OVERLAP,t,valid,bit_in,expected,mealy,history);
-            if(!rst_n)begin history.delete();expected=0;end
-            else if(expected&&!OVERLAP)history.delete();
+            if(rst_n&&mealy!==expected)$fatal(1,"Mealy P=%0d overlap=%0d t=%0d valid=%b input=%b expected=%b got=%b prefix=%0d",P,OVERLAP,t,valid,bit_in,expected,mealy,prefix_length);
+            if(!rst_n)begin prefix_length=0;expected=0;end
+            else if(expected&&!OVERLAP)prefix_length=0;
             @(posedge clk);#1;if(moore!==expected)$fatal(1,"Moore");
         end
         $display("PASS sequence P=%0d overlap=%0d cycles=2000",P,OVERLAP);finished=1;
