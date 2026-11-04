@@ -117,7 +117,7 @@ module pattern_check #(parameter P=4,parameter [P-1:0] PAT=4'b1011,parameter OVE
             end
             #1;
             // A synchronous reset does not gate combinational Mealy output.
-            if(rst_n&&mealy!==expected)$fatal(1,"Mealy");
+            if(rst_n&&mealy!==expected)$fatal(1,"Mealy P=%0d overlap=%0d t=%0d valid=%b input=%b expected=%b got=%b reference=%p",P,OVERLAP,t,valid,bit_in,expected,mealy,history);
             if(!rst_n)begin history.delete();expected=0;end
             else if(expected&&!OVERLAP)history.delete();
             @(posedge clk);#1;if(moore!==expected)$fatal(1,"Moore");
