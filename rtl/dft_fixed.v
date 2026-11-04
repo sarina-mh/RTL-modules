@@ -1,0 +1,380 @@
+// Complex direct DFT/IDFT. N must divide 64 (1,2,4,8,16,32,64).
+// Same fixed-point scale on input/output; forward is unnormalized, inverse /N.
+// One complex multiply-accumulate per cycle; W<=32,Q<=24,W>=Q+4.
+// Accumulation uses 64 bits; choose signal headroom to avoid internal overflow.
+
+// =====================================================================
+// dft_fixed: complete controller + datapath + top in one Verilog file.
+// Pulse start while busy=0. Inputs are latched on the accepting edge.
+// Reset and port conventions are preserved from the original module.
+// Packed array lane i occupies bits [i*W +: W], unless stated otherwise.
+// =====================================================================
+// control[0]: saved_real <= real_in;
+// control[1]: saved_imag <= imag_in;
+// control[2]: bin <= 0;
+// control[3]: sample <= 0;
+// control[4]: sum_real <= 0;
+// control[5]: sum_imag <= 0;
+// control[6]: overflow <= 0;
+// control[7]: real_out[(bin * W) +: W] <= clip(normalized_real);
+// control[8]: imag_out[(bin * W) +: W] <= clip(normalized_imag);
+// control[9]: overflow <= 1;
+// control[10]: sample <= 0;
+// control[11]: sum_real <= 0;
+// control[12]: sum_imag <= 0;
+// control[13]: bin <= bin + 1;
+// control[14]: sum_real <= next_real;
+// control[15]: sum_imag <= next_imag;
+// control[16]: sample <= sample + 1;
+
+// ---------------- CONTROLLER ----------------
+module dft_fixed_controller #
+(
+  parameter W = 32,
+  parameter Q = 20,
+  parameter N = 8,
+  parameter INVERSE = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [5:0] status,
+  output reg [16:0] control,
+  output reg busy,
+  output reg done);
+localparam signed [63:0] MAXIMUM = (64'sd1 << W - 1) - 1;
+localparam signed [63:0] MINIMUM = -(64'sd1 << W - 1);
+reg reporting;
+reg next_busy;
+reg next_done;
+reg next_reporting;
+
+// FSM state/handshake registers; all data writes are control strobes.
+
+always @(posedge clk) if(!rst_n) begin
+  busy <= 0;
+  done <= 0;
+  reporting <= 0;
+end else begin
+  busy <= next_busy;
+  done <= next_done;
+  reporting <= next_reporting;
+end
+
+
+always @(*) begin
+  next_busy = busy;
+  next_done = done;
+  next_reporting = reporting;
+  control = 0;
+  begin
+    next_done = 0;
+    if(start && !busy) begin
+      control[0] = 1'b1;
+      control[1] = 1'b1;
+      control[2] = 1'b1;
+      control[3] = 1'b1;
+      control[4] = 1'b1;
+      control[5] = 1'b1;
+      next_busy = 1;
+      control[6] = 1'b1;
+      next_reporting = 0;
+    end else if(busy) begin
+      if(reporting) begin
+        next_busy = 0;
+        next_done = 1;
+      end else if(status[0]) begin
+        control[7] = 1'b1;
+        control[8] = 1'b1;
+        if(status[1] || status[2] || status[3] || status[4]) control[9] = 1'b1;
+        control[10] = 1'b1;
+        control[11] = 1'b1;
+        control[12] = 1'b1;
+        if(status[5]) next_reporting = 1;
+        else control[13] = 1'b1;
+      end else begin
+        control[14] = 1'b1;
+        control[15] = 1'b1;
+        control[16] = 1'b1;
+      end
+    end
+  end
+end
+
+endmodule
+
+// ---------------- DATAPATH ----------------
+module dft_fixed_datapath #
+(
+  parameter W = 32,
+  parameter Q = 20,
+  parameter N = 8,
+  parameter INVERSE = 0
+)
+(
+  input clk,
+  input rst_n,
+  input [N*W-1:0] real_in,
+  input [N*W-1:0] imag_in,
+  input [16:0] control,
+  output [5:0] status,
+  output reg [N*W-1:0] real_out,
+  output reg [N*W-1:0] imag_out,
+  output reg overflow);
+localparam signed [63:0] MAXIMUM = (64'sd1 << W - 1) - 1;
+localparam signed [63:0] MINIMUM = -(64'sd1 << W - 1);
+reg [N*W-1:0] saved_real;
+reg [N*W-1:0] saved_imag;
+integer bin;
+integer sample;
+integer k;
+wire [5:0] phase;
+assign phase = bin * sample % N * (64 / N);
+wire signed [W-1:0] wr;
+wire signed [W-1:0] wi_forward;
+wire signed [W-1:0] wi;
+assign wi = (INVERSE)? -wi_forward : wi_forward;
+wire signed [W-1:0] xr;
+assign xr = saved_real[(sample * W) +: W];
+wire signed [W-1:0] xi;
+assign xi = saved_imag[(sample * W) +: W];
+reg signed [63:0] sum_real;
+reg signed [63:0] sum_imag;
+reg signed [63:0] next_real;
+reg signed [63:0] next_imag;
+reg signed [63:0] normalized_real;
+reg signed [63:0] normalized_imag;
+reg signed [127:0] pr;
+reg signed [127:0] pi;
+
+dft_fixed_helper_twiddle_rom
+#(
+  W,
+  Q
+)
+table_rom
+(
+  phase,
+  wr,
+  wi_forward
+);
+
+
+function [W-1:0] clip;
+  input signed [63:0] value;
+  begin
+    if(value > MAXIMUM) clip = MAXIMUM;
+    else if(value < MINIMUM) clip = MINIMUM;
+    else clip = value;
+  end
+endfunction
+
+
+always @(*) begin
+  pr = $signed(xr) * $signed(wr) - $signed(xi) * $signed(wi);
+  pi = $signed(xr) * $signed(wi) + $signed(xi) * $signed(wr);
+  next_real = sum_real + (pr >>> Q);
+  next_imag = sum_imag + (pi >>> Q);
+  normalized_real = (INVERSE)? next_real / N : next_real;
+  normalized_imag = (INVERSE)? next_imag / N : next_imag;
+end
+
+
+// Status predicates are generated by the datapath, never by the FSM.
+assign status[0] = (sample == N - 1);
+assign status[1] = (normalized_real > MAXIMUM);
+assign status[2] = (normalized_real < MINIMUM);
+assign status[3] = (normalized_imag > MAXIMUM);
+assign status[4] = (normalized_imag < MINIMUM);
+assign status[5] = (bin == N - 1);
+
+// Register-transfer operations. Later strobes retain nonblocking
+// assignment priority when the same destination is written twice.
+
+always @(posedge clk) if(!rst_n) begin
+  saved_real <= 0;
+  saved_imag <= 0;
+  real_out <= 0;
+  imag_out <= 0;
+  overflow <= 0;
+  bin <= 0;
+  sample <= 0;
+  sum_real <= 0;
+  sum_imag <= 0;
+end else begin
+  if(control[0]) begin
+    saved_real <= real_in;
+  end
+  if(control[1]) begin
+    saved_imag <= imag_in;
+  end
+  if(control[2]) begin
+    bin <= 0;
+  end
+  if(control[3]) begin
+    sample <= 0;
+  end
+  if(control[4]) begin
+    sum_real <= 0;
+  end
+  if(control[5]) begin
+    sum_imag <= 0;
+  end
+  if(control[6]) begin
+    overflow <= 0;
+  end
+  if(control[7]) begin
+    real_out[(bin * W) +: W] <= clip(normalized_real);
+  end
+  if(control[8]) begin
+    imag_out[(bin * W) +: W] <= clip(normalized_imag);
+  end
+  if(control[9]) begin
+    overflow <= 1;
+  end
+  if(control[10]) begin
+    sample <= 0;
+  end
+  if(control[11]) begin
+    sum_real <= 0;
+  end
+  if(control[12]) begin
+    sum_imag <= 0;
+  end
+  if(control[13]) begin
+    bin <= bin + 1;
+  end
+  if(control[14]) begin
+    sum_real <= next_real;
+  end
+  if(control[15]) begin
+    sum_imag <= next_imag;
+  end
+  if(control[16]) begin
+    sample <= sample + 1;
+  end
+end
+
+endmodule
+
+// ---------------- TOP ----------------
+module dft_fixed #
+(
+  parameter W = 32,
+  parameter Q = 20,
+  parameter N = 8,
+  parameter INVERSE = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [N*W-1:0] real_in,
+  input [N*W-1:0] imag_in,
+  output [N*W-1:0] real_out,
+  output [N*W-1:0] imag_out,
+  output busy,
+  output done,
+  output overflow);
+wire [16:0] control;
+wire [5:0] status;
+dft_fixed_controller #(.W(W), .Q(Q), .N(N), .INVERSE(INVERSE)) controller (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(start),
+    .status(status),
+    .control(control),
+    .busy(busy),
+    .done(done)
+);
+dft_fixed_datapath #(.W(W), .Q(Q), .N(N), .INVERSE(INVERSE)) datapath (
+    .clk(clk),
+    .rst_n(rst_n),
+    .real_in(real_in),
+    .imag_in(imag_in),
+    .control(control),
+    .status(status),
+    .real_out(real_out),
+    .imag_out(imag_out),
+    .overflow(overflow)
+);
+endmodule
+
+
+// ---------------- PRIVATE HELPERS ----------------
+module dft_fixed_helper_twiddle_rom #(parameter W=32,Q=20)(input [5:0] phase,
+    output reg signed [W-1:0] real_part,imag_part);
+    reg signed [63:0] r,i;
+    always @*begin
+        r=0;i=0;
+        case(phase)
+            6'd0:begin r=64'sd1073741824;i=64'sd0;end
+            6'd1:begin r=64'sd1068571464;i=-64'sd105245103;end
+            6'd2:begin r=64'sd1053110176;i=-64'sd209476638;end
+            6'd3:begin r=64'sd1027506862;i=-64'sd311690799;end
+            6'd4:begin r=64'sd992008094;i=-64'sd410903207;end
+            6'd5:begin r=64'sd946955747;i=-64'sd506158392;end
+            6'd6:begin r=64'sd892783698;i=-64'sd596538995;end
+            6'd7:begin r=64'sd830013654;i=-64'sd681174602;end
+            6'd8:begin r=64'sd759250125;i=-64'sd759250125;end
+            6'd9:begin r=64'sd681174602;i=-64'sd830013654;end
+            6'd10:begin r=64'sd596538995;i=-64'sd892783698;end
+            6'd11:begin r=64'sd506158392;i=-64'sd946955747;end
+            6'd12:begin r=64'sd410903207;i=-64'sd992008094;end
+            6'd13:begin r=64'sd311690799;i=-64'sd1027506862;end
+            6'd14:begin r=64'sd209476638;i=-64'sd1053110176;end
+            6'd15:begin r=64'sd105245103;i=-64'sd1068571464;end
+            6'd16:begin r=64'sd0;i=-64'sd1073741824;end
+            6'd17:begin r=-64'sd105245103;i=-64'sd1068571464;end
+            6'd18:begin r=-64'sd209476638;i=-64'sd1053110176;end
+            6'd19:begin r=-64'sd311690799;i=-64'sd1027506862;end
+            6'd20:begin r=-64'sd410903207;i=-64'sd992008094;end
+            6'd21:begin r=-64'sd506158392;i=-64'sd946955747;end
+            6'd22:begin r=-64'sd596538995;i=-64'sd892783698;end
+            6'd23:begin r=-64'sd681174602;i=-64'sd830013654;end
+            6'd24:begin r=-64'sd759250125;i=-64'sd759250125;end
+            6'd25:begin r=-64'sd830013654;i=-64'sd681174602;end
+            6'd26:begin r=-64'sd892783698;i=-64'sd596538995;end
+            6'd27:begin r=-64'sd946955747;i=-64'sd506158392;end
+            6'd28:begin r=-64'sd992008094;i=-64'sd410903207;end
+            6'd29:begin r=-64'sd1027506862;i=-64'sd311690799;end
+            6'd30:begin r=-64'sd1053110176;i=-64'sd209476638;end
+            6'd31:begin r=-64'sd1068571464;i=-64'sd105245103;end
+            6'd32:begin r=-64'sd1073741824;i=64'sd0;end
+            6'd33:begin r=-64'sd1068571464;i=64'sd105245103;end
+            6'd34:begin r=-64'sd1053110176;i=64'sd209476638;end
+            6'd35:begin r=-64'sd1027506862;i=64'sd311690799;end
+            6'd36:begin r=-64'sd992008094;i=64'sd410903207;end
+            6'd37:begin r=-64'sd946955747;i=64'sd506158392;end
+            6'd38:begin r=-64'sd892783698;i=64'sd596538995;end
+            6'd39:begin r=-64'sd830013654;i=64'sd681174602;end
+            6'd40:begin r=-64'sd759250125;i=64'sd759250125;end
+            6'd41:begin r=-64'sd681174602;i=64'sd830013654;end
+            6'd42:begin r=-64'sd596538995;i=64'sd892783698;end
+            6'd43:begin r=-64'sd506158392;i=64'sd946955747;end
+            6'd44:begin r=-64'sd410903207;i=64'sd992008094;end
+            6'd45:begin r=-64'sd311690799;i=64'sd1027506862;end
+            6'd46:begin r=-64'sd209476638;i=64'sd1053110176;end
+            6'd47:begin r=-64'sd105245103;i=64'sd1068571464;end
+            6'd48:begin r=64'sd0;i=64'sd1073741824;end
+            6'd49:begin r=64'sd105245103;i=64'sd1068571464;end
+            6'd50:begin r=64'sd209476638;i=64'sd1053110176;end
+            6'd51:begin r=64'sd311690799;i=64'sd1027506862;end
+            6'd52:begin r=64'sd410903207;i=64'sd992008094;end
+            6'd53:begin r=64'sd506158392;i=64'sd946955747;end
+            6'd54:begin r=64'sd596538995;i=64'sd892783698;end
+            6'd55:begin r=64'sd681174602;i=64'sd830013654;end
+            6'd56:begin r=64'sd759250125;i=64'sd759250125;end
+            6'd57:begin r=64'sd830013654;i=64'sd681174602;end
+            6'd58:begin r=64'sd892783698;i=64'sd596538995;end
+            6'd59:begin r=64'sd946955747;i=64'sd506158392;end
+            6'd60:begin r=64'sd992008094;i=64'sd410903207;end
+            6'd61:begin r=64'sd1027506862;i=64'sd311690799;end
+            6'd62:begin r=64'sd1053110176;i=64'sd209476638;end
+            6'd63:begin r=64'sd1068571464;i=64'sd105245103;end
+            default:begin r=0;i=0;end
+        endcase
+        real_part=r >>> (30-Q);imag_part=i >>> (30-Q);
+    end
+endmodule

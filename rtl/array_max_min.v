@@ -1,105 +1,181 @@
-// ============================================================================
-// Module: array_max_min  (Array maximum/minimum finder)
-// ----------------------------------------------------------------------------
-// Description:
-//   Finds the maximum and minimum elements of an array of N unsigned values.
-//   The input array is scanned directly from data_in, one element per clock
-//   cycle. The first element initializes both max_val and min_val.
-//
-//   Handshake:
-//     - Pulse start for at least one clock while busy is low.
-//     - busy goes high during the scan and low again when finished.
-//     - done is a one-cycle pulse when max_val and min_val are valid.
-//
-// Parameters:
-//   N     : Number of elements in the array (default 8)
-//   WIDTH : Bit width of each element (default 8)
-//
-// Inputs:
-//   clk      : Clock
-//   rst      : Asynchronous reset, active high
-//   start    : Start searching (pulse)
-//   data_in  : Flattened input array, N*WIDTH bits
-//              (element k = data_in[k*WIDTH +: WIDTH])
-//
-// Outputs:
-//   max_val : Largest element found
-//   min_val : Smallest element found
-//   done    : One-cycle completion pulse
-//   busy    : High while scanning
-// ============================================================================
-module array_max_min #(
-    parameter N     = 8,
-    parameter WIDTH = 8
-)(
-    input  wire               clk,
-    input  wire               rst,
-    input  wire               start,
-    input  wire [N*WIDTH-1:0] data_in,
-    output reg  [WIDTH-1:0]   max_val,
-    output reg  [WIDTH-1:0]   min_val,
-    output reg                done,
-    output reg                busy
-);
+// =====================================================================
+// array_max_min: complete controller + datapath + top in one Verilog file.
+// Pulse start while busy=0. Keep data_in stable until done (legacy API).
+// Reset and port conventions are preserved from the original module.
+// Packed array lane i occupies bits [i*W +: W], unless stated otherwise.
+// =====================================================================
+// control[0]: max_val <= data_in[0 +: WIDTH];
+// control[1]: min_val <= data_in[0 +: WIDTH];
+// control[2]: k <= 1;
+// control[3]: max_val <= data_in[(k * WIDTH) +: WIDTH];
+// control[4]: min_val <= data_in[(k * WIDTH) +: WIDTH];
+// control[5]: k <= k + 1;
 
-    localparam IDLE = 2'd0;
-    localparam SCAN = 2'd1;
-    localparam FIN  = 2'd2;
+// ---------------- CONTROLLER ----------------
+module array_max_min_controller #
+(
+  parameter N = 8,
+  parameter WIDTH = 8
+)
+(
+  input wire clk,
+  input wire rst,
+  input wire start,
+  input [2:0] status,
+  output reg [5:0] control,
+  output reg busy,
+  output reg done);
+localparam IDLE = 2'd0;
+localparam SCAN = 2'd1;
+localparam FIN = 2'd2;
+reg [1:0] state;
+reg next_busy;
+reg next_done;
+reg [1:0] next_state;
 
-    reg [1:0] state;
-    integer k;
+// FSM state/handshake registers; all data writes are control strobes.
 
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state   <= IDLE;
-            done    <= 1'b0;
-            busy    <= 1'b0;
-            max_val <= {WIDTH{1'b0}};
-            min_val <= {WIDTH{1'b0}};
-            k       <= 0;
-        end else begin
-            case (state)
-                IDLE: begin
-                    done <= 1'b0;
-                    busy <= 1'b0;
-                    if (start) begin
-                        // Initialize both with the first element.
-                        max_val <= data_in[0 +: WIDTH];
-                        min_val <= data_in[0 +: WIDTH];
-                        k       <= 1;
-                        if (N <= 1) begin
-                            state <= FIN;
-                        end else begin
-                            busy  <= 1'b1;
-                            state <= SCAN;
-                        end
-                    end
-                end
+always @(posedge clk or posedge rst) if(rst) begin
+  state <= IDLE;
+  done <= 1'b0;
+  busy <= 1'b0;
+end else begin
+  busy <= next_busy;
+  done <= next_done;
+  state <= next_state;
+end
 
-                // Compare one element per cycle.
-                SCAN: begin
-                    if (k < N) begin
-                        if (data_in[k*WIDTH +: WIDTH] > max_val)
-                            max_val <= data_in[k*WIDTH +: WIDTH];
 
-                        if (data_in[k*WIDTH +: WIDTH] < min_val)
-                            min_val <= data_in[k*WIDTH +: WIDTH];
-
-                        k <= k + 1;
-                    end else begin
-                        state <= FIN;
-                    end
-                end
-
-                FIN: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b1;
-                    state <= IDLE;
-                end
-
-                default: state <= IDLE;
-            endcase
+always @(*) begin
+  next_busy = busy;
+  next_done = done;
+  next_state = state;
+  control = 0;
+  begin
+    case(state)
+      IDLE: begin
+        next_done = 1'b0;
+        next_busy = 1'b0;
+        if(start) begin
+          control[0] = 1'b1;
+          control[1] = 1'b1;
+          control[2] = 1'b1;
+          if(N <= 1) begin
+            next_state = FIN;
+          end else begin
+            next_busy = 1'b1;
+            next_state = SCAN;
+          end
         end
-    end
+      end
+      SCAN: begin
+        if(status[0]) begin
+          if(status[1]) control[3] = 1'b1;
+          if(status[2]) control[4] = 1'b1;
+          control[5] = 1'b1;
+        end else begin
+          next_state = FIN;
+        end
+      end
+      FIN: begin
+        next_busy = 1'b0;
+        next_done = 1'b1;
+        next_state = IDLE;
+      end
+      default: next_state = IDLE;
+    endcase
+  end
+end
 
+endmodule
+
+// ---------------- DATAPATH ----------------
+module array_max_min_datapath #
+(
+  parameter N = 8,
+  parameter WIDTH = 8
+)
+(
+  input wire clk,
+  input wire rst,
+  input wire [N*WIDTH-1:0] data_in,
+  input [5:0] control,
+  output [2:0] status,
+  output reg [WIDTH-1:0] max_val,
+  output reg [WIDTH-1:0] min_val);
+localparam IDLE = 2'd0;
+localparam SCAN = 2'd1;
+localparam FIN = 2'd2;
+integer k;
+
+// Status predicates are generated by the datapath, never by the FSM.
+assign status[0] = (k < N);
+assign status[1] = (data_in[(k * WIDTH) +: WIDTH] > max_val);
+assign status[2] = (data_in[(k * WIDTH) +: WIDTH] < min_val);
+
+// Register-transfer operations. Later strobes retain nonblocking
+// assignment priority when the same destination is written twice.
+
+always @(posedge clk or posedge rst) if(rst) begin
+  max_val <= { WIDTH{ 1'b0 } };
+  min_val <= { WIDTH{ 1'b0 } };
+  k <= 0;
+end else begin
+  if(control[0]) begin
+    max_val <= data_in[0 +: WIDTH];
+  end
+  if(control[1]) begin
+    min_val <= data_in[0 +: WIDTH];
+  end
+  if(control[2]) begin
+    k <= 1;
+  end
+  if(control[3]) begin
+    max_val <= data_in[(k * WIDTH) +: WIDTH];
+  end
+  if(control[4]) begin
+    min_val <= data_in[(k * WIDTH) +: WIDTH];
+  end
+  if(control[5]) begin
+    k <= k + 1;
+  end
+end
+
+endmodule
+
+// ---------------- TOP ----------------
+module array_max_min #
+(
+  parameter N = 8,
+  parameter WIDTH = 8
+)
+(
+  input wire clk,
+  input wire rst,
+  input wire start,
+  input wire [N*WIDTH-1:0] data_in,
+  output [WIDTH-1:0] max_val,
+  output [WIDTH-1:0] min_val,
+  output done,
+  output busy);
+wire [5:0] control;
+wire [2:0] status;
+array_max_min_controller #(.N(N), .WIDTH(WIDTH)) controller (
+    .clk(clk),
+    .rst(rst),
+    .start(start),
+    .status(status),
+    .control(control),
+    .busy(busy),
+    .done(done)
+);
+array_max_min_datapath #(.N(N), .WIDTH(WIDTH)) datapath (
+    .clk(clk),
+    .rst(rst),
+    .data_in(data_in),
+    .control(control),
+    .status(status),
+    .max_val(max_val),
+    .min_val(min_val)
+);
 endmodule

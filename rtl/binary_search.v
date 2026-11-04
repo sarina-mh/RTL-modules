@@ -1,119 +1,188 @@
-// ============================================================================
-// Module: binary_search  (Binary search)
-// ----------------------------------------------------------------------------
-// Description:
-//   Searches for key in a sorted array of N unsigned elements using binary
-//   search. The array is read directly from data_in and one comparison is
-//   performed per clock cycle. When a match is found, found is asserted and
-//   index holds the matching position. If the key is not present, found stays
-//   low and index is zero.
-//
-//   Handshake:
-//     - Pulse start for at least one clock while busy is low.
-//     - busy goes high during the search and low again when finished.
-//     - done is a one-cycle pulse when found and index are valid.
-//
-// Parameters:
-//   N     : Number of elements in the array (default 8)
-//   WIDTH : Bit width of each element and of the key (default 8)
-//   IDX_W : Index width; automatically ceil(log2(N))
-//
-// Inputs:
-//   clk      : Clock
-//   rst      : Asynchronous reset, active high
-//   start    : Start searching (pulse)
-//   data_in  : Flattened sorted array, N*WIDTH bits
-//              (element k = data_in[k*WIDTH +: WIDTH])
-//   key      : Value to search for (WIDTH bits)
-//
-// Outputs:
-//   found : Asserted when key is present
-//   index : Position of key when found (IDX_W bits)
-//   done  : One-cycle completion pulse
-//   busy  : High while searching
-// ============================================================================
-module binary_search #(
-    parameter N     = 8,
-    parameter WIDTH = 8,
-    parameter IDX_W = (N <= 2) ? 1 : $clog2(N)
-)(
-    input  wire               clk,
-    input  wire               rst,
-    input  wire               start,
-    input  wire [N*WIDTH-1:0] data_in,
-    input  wire [WIDTH-1:0]   key,
-    output reg                found,
-    output reg  [IDX_W-1:0]   index,
-    output reg                done,
-    output reg                busy
-);
+// Lower-bound binary search on an ASCENDING sorted array; first match wins.
 
-    localparam IDLE   = 2'd0;
-    localparam SEARCH = 2'd1;
-    localparam FIN    = 2'd2;
+// =====================================================================
+// binary_search: complete controller + datapath + top in one Verilog file.
+// Pulse start while busy=0. Inputs are latched on the accepting edge.
+// Reset and port conventions are preserved from the original module.
+// Packed array lane i occupies bits [i*W +: W], unless stated otherwise.
+// =====================================================================
+// control[0]: data <= data_in;
+// control[1]: key <= target;
+// control[2]: low <= 0;
+// control[3]: high <= N;
+// control[4]: found <= (low < N) && (current == key);
+// control[5]: index <= ((low < N) && (current == key))? low : 0;
+// control[6]: low <= middle + 1;
+// control[7]: high <= middle;
 
-    reg [1:0] state;
+// ---------------- CONTROLLER ----------------
+module binary_search_controller #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0,
+  parameter I = (N > 1)? $clog2(N) : 1
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [1:0] status,
+  output reg [7:0] control,
+  output reg busy,
+  output reg done);
 
-    // Signed integers are used so hi can become -1 without wrapping around.
-    integer lo, hi;
 
-    // Midpoint is computed combinationally; arithmetic shift keeps the sign.
-    wire signed [31:0] mid;
-    assign mid = (lo + hi) >>> 1;
+reg next_busy;
+reg next_done;
 
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state <= IDLE;
-            found <= 1'b0;
-            index <= {IDX_W{1'b0}};
-            done  <= 1'b0;
-            busy  <= 1'b0;
-            lo    <= 0;
-            hi    <= 0;
-        end else begin
-            case (state)
-                IDLE: begin
-                    done  <= 1'b0;
-                    busy  <= 1'b0;
-                    found <= 1'b0;
-                    index <= {IDX_W{1'b0}};
-                    if (start) begin
-                        lo <= 0;
-                        hi <= N - 1;
-                        if (N <= 0) begin
-                            state <= FIN;
-                        end else begin
-                            busy  <= 1'b1;
-                            state <= SEARCH;
-                        end
-                    end
-                end
+// FSM state/handshake registers; all data writes are control strobes.
 
-                SEARCH: begin
-                    if (lo <= hi) begin
-                        if (data_in[mid*WIDTH +: WIDTH] == key) begin
-                            found <= 1'b1;
-                            index <= mid;
-                            state <= FIN;
-                        end else if (data_in[mid*WIDTH +: WIDTH] < key) begin
-                            lo <= mid + 1;
-                        end else begin
-                            hi <= mid - 1;
-                        end
-                    end else begin
-                        state <= FIN;
-                    end
-                end
+always @(posedge clk) if(!rst_n) begin
+  busy <= 0;
+  done <= 0;
+end else begin
+  busy <= next_busy;
+  done <= next_done;
+end
 
-                FIN: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b1;
-                    state <= IDLE;
-                end
 
-                default: state <= IDLE;
-            endcase
-        end
+always @(*) begin
+  next_busy = busy;
+  next_done = done;
+  control = 0;
+  begin
+    next_done = 0;
+    if(start && !busy) begin
+      control[0] = 1'b1;
+      control[1] = 1'b1;
+      control[2] = 1'b1;
+      control[3] = 1'b1;
+      next_busy = 1;
+    end else if(busy) begin
+      if(status[0]) begin
+        control[4] = 1'b1;
+        control[5] = 1'b1;
+        next_busy = 0;
+        next_done = 1;
+      end else if(status[1]) control[6] = 1'b1;
+      else control[7] = 1'b1;
     end
+  end
+end
 
+endmodule
+
+// ---------------- DATAPATH ----------------
+module binary_search_datapath #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0,
+  parameter I = (N > 1)? $clog2(N) : 1
+)
+(
+  input clk,
+  input rst_n,
+  input [N*W-1:0] data_in,
+  input [W-1:0] target,
+  input [7:0] control,
+  output [1:0] status,
+  output reg found,
+  output reg [I-1:0] index);
+reg [N*W-1:0] data;
+reg [W-1:0] key;
+integer low;
+integer high;
+integer middle;
+wire [W-1:0] current;
+assign current = data[(((middle < N)? middle : 0) * W) +: W];
+wire less;
+assign less = (SIGNED)? $signed(current) < $signed(key) : current < key;
+
+always @(*) middle = (low + high) / 2;
+
+
+// Status predicates are generated by the datapath, never by the FSM.
+assign status[0] = (low == high);
+assign status[1] = less;
+
+// Register-transfer operations. Later strobes retain nonblocking
+// assignment priority when the same destination is written twice.
+
+always @(posedge clk) if(!rst_n) begin
+  found <= 0;
+  index <= 0;
+  data <= 0;
+  key <= 0;
+  low <= 0;
+  high <= 0;
+end else begin
+  if(control[0]) begin
+    data <= data_in;
+  end
+  if(control[1]) begin
+    key <= target;
+  end
+  if(control[2]) begin
+    low <= 0;
+  end
+  if(control[3]) begin
+    high <= N;
+  end
+  if(control[4]) begin
+    found <= (low < N) && (current == key);
+  end
+  if(control[5]) begin
+    index <= ((low < N) && (current == key))? low : 0;
+  end
+  if(control[6]) begin
+    low <= middle + 1;
+  end
+  if(control[7]) begin
+    high <= middle;
+  end
+end
+
+endmodule
+
+// ---------------- TOP ----------------
+module binary_search #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0,
+  parameter I = (N > 1)? $clog2(N) : 1
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [N*W-1:0] data_in,
+  input [W-1:0] target,
+  output found,
+  output [I-1:0] index,
+  output busy,
+  output done);
+wire [7:0] control;
+wire [1:0] status;
+binary_search_controller #(.W(W), .N(N), .SIGNED(SIGNED), .I(I)) controller (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(start),
+    .status(status),
+    .control(control),
+    .busy(busy),
+    .done(done)
+);
+binary_search_datapath #(.W(W), .N(N), .SIGNED(SIGNED), .I(I)) datapath (
+    .clk(clk),
+    .rst_n(rst_n),
+    .data_in(data_in),
+    .target(target),
+    .control(control),
+    .status(status),
+    .found(found),
+    .index(index)
+);
 endmodule

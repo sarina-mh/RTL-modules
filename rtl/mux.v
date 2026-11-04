@@ -1,42 +1,8 @@
-// ============================================================================
-// Module: mux  (Multiplexer)
-// ----------------------------------------------------------------------------
-// Description:
-//   Parameterized multiplexer. It has N inputs, each WIDTH bits wide, and
-//   connects one of them to the output based on sel. The inputs are packed
-//   into a single vector (input 0 in the lowest bits, input N-1 in the highest).
-//
-// Parameters:
-//   WIDTH     : Width of each input/output (default 8)
-//   N         : Number of inputs (default 4)
-//   SEL_WIDTH : Select width; automatically ceil(log2(N))
-//
-// Inputs:
-//   in  : Packed input vector, N*WIDTH bits
-//   sel : Index of the selected input, SEL_WIDTH bits
-//
-// Outputs:
-//   out : Selected input, WIDTH bits
-// ============================================================================
-module mux #(
-    parameter WIDTH     = 8,
-    parameter N         = 4,
-    parameter SEL_WIDTH = (N <= 2) ? 1 : $clog2(N)
-)(
-    input  wire [N*WIDTH-1:0]   in,
-    input  wire [SEL_WIDTH-1:0] sel,
-    output reg  [WIDTH-1:0]     out
+// Module: mux. Original group: combinational.
+// Verilog-2005. Packed lane i occupies data[i*W +: W].
+module mux #(parameter W=8, N=4, S=(N>1?$clog2(N):1)) (
+    input [N*W-1:0] data, input [S-1:0] sel, output reg [W-1:0] y
 );
-
-    integer i;
-
-    always @(*) begin
-        // Default to zero so the output is never floating for an invalid sel.
-        out = {WIDTH{1'b0}};
-        for (i = 0; i < N; i = i + 1) begin
-            if (sel == i)
-                out = in[i*WIDTH +: WIDTH];
-        end
-    end
-
+    // Out-of-range selections produce zero, including non-power-of-two N.
+    always @* begin y=0; if (sel<N) y=data[sel*W +: W]; end
 endmodule

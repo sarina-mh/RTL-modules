@@ -1,121 +1,210 @@
-// ============================================================================
-// Module: bubble_sort  (Bubble sort)
-// ----------------------------------------------------------------------------
-// Description:
-//   Sorts an array of N unsigned elements in ascending order using the
-//   bubble-sort algorithm. The array is sampled from data_in when start is
-//   asserted. Repeated passes compare adjacent elements and swap them when
-//   they are out of order; after pass i the largest i+1 elements are in place.
-//   One comparison is performed per clock cycle.
-//
-//   Handshake:
-//     - Pulse start for at least one clock while busy is low.
-//     - busy goes high during sorting and low again when finished.
-//     - done is a one-cycle pulse when data_out holds the sorted array.
-//
-// Parameters:
-//   N     : Number of elements in the array (default 8)
-//   WIDTH : Bit width of each element (default 8)
-//
-// Inputs:
-//   clk      : Clock
-//   rst      : Asynchronous reset, active high
-//   start    : Start sorting (pulse)
-//   data_in  : Flattened input array, N*WIDTH bits
-//              (element k = data_in[k*WIDTH +: WIDTH])
-//
-// Outputs:
-//   data_out : Flattened sorted array, N*WIDTH bits
-//   done     : One-cycle completion pulse
-//   busy     : High while sorting
-// ============================================================================
-module bubble_sort #(
-    parameter N     = 8,
-    parameter WIDTH = 8
-)(
-    input  wire               clk,
-    input  wire               rst,
-    input  wire               start,
-    input  wire [N*WIDTH-1:0] data_in,
-    output wire [N*WIDTH-1:0] data_out,
-    output reg                done,
-    output reg                busy
-);
+// Module: bubble_sort. Original group: algorithms.
+// Bubble sort: one adjacent comparison per cycle; early exit after a clean pass.
 
-    localparam IDLE = 2'd0;
-    localparam CMP  = 2'd1;
-    localparam FIN  = 2'd2;
+// =====================================================================
+// bubble_sort: complete controller + datapath + top in one Verilog file.
+// Pulse start while busy=0. Inputs are latched on the accepting edge.
+// Reset and port conventions are preserved from the original module.
+// Packed array lane i occupies bits [i*W +: W], unless stated otherwise.
+// =====================================================================
+// control[0]: for(k=0; k<N; k=k+1) mem[k] <= data_in[(k * W) +: W];
+// control[1]: j <= 0;
+// control[2]: limit <= N - 1;
+// control[3]: changed <= 0;
+// control[4]: for(k=0; k<N; k=k+1) data_out[(k * W) +: W] <= mem[k];
+// control[5]: mem[j] <= mem[j + 1];
+// control[6]: mem[j + 1] <= mem[j];
+// control[7]: changed <= 1;
+// control[8]: limit <= limit - 1;
+// control[9]: j <= 0;
+// control[10]: changed <= 0;
+// control[11]: j <= j + 1;
 
-    reg [WIDTH-1:0] mem [0:N-1];
-    reg [1:0]       state;
+// ---------------- CONTROLLER ----------------
+module bubble_sort_controller #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [4:0] status,
+  output reg [11:0] control,
+  output reg busy,
+  output reg done);
 
-    integer i, j, k;
+reg finish;
+reg next_busy;
+reg next_done;
+reg next_finish;
 
-    // Expose the internal array as a flat output vector.
-    genvar g;
-    generate
-        for (g = 0; g < N; g = g + 1) begin : g_out
-            assign data_out[g*WIDTH +: WIDTH] = mem[g];
+// FSM state/handshake registers; all data writes are control strobes.
+
+always @(posedge clk) if(!rst_n) begin
+  busy <= 0;
+  done <= 0;
+  finish <= 0;
+end else begin
+  busy <= next_busy;
+  done <= next_done;
+  finish <= next_finish;
+end
+
+
+always @(*) begin
+  next_busy = busy;
+  next_done = done;
+  next_finish = finish;
+  control = 0;
+  begin
+    next_done = 0;
+    if(start && !busy) begin
+      control[0] = 1'b1;
+      next_busy = 1;
+      control[1] = 1'b1;
+      control[2] = 1'b1;
+      control[3] = 1'b1;
+      next_finish = N == 1;
+    end else if(busy) begin
+      if(finish) begin
+        control[4] = 1'b1;
+        next_busy = 0;
+        next_done = 1;
+      end else begin
+        if(status[0]) begin
+          control[5] = 1'b1;
+          control[6] = 1'b1;
+          control[7] = 1'b1;
         end
-    endgenerate
-
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state <= IDLE;
-            done  <= 1'b0;
-            busy  <= 1'b0;
-            i     <= 0;
-            j     <= 0;
-        end else begin
-            case (state)
-                IDLE: begin
-                    done <= 1'b0;
-                    busy <= 1'b0;
-                    if (start) begin
-                        // Load the input array into internal memory.
-                        for (k = 0; k < N; k = k + 1)
-                            mem[k] <= data_in[k*WIDTH +: WIDTH];
-
-                        i <= 0;
-                        j <= 0;
-                        if (N <= 1) begin
-                            state <= FIN;
-                        end else begin
-                            busy  <= 1'b1;
-                            state <= CMP;
-                        end
-                    end
-                end
-
-                // Compare and swap one adjacent pair per cycle.
-                CMP: begin
-                    if (mem[j] > mem[j+1]) begin
-                        mem[j]   <= mem[j+1];
-                        mem[j+1] <= mem[j];
-                    end
-
-                    if (j == N-2-i) begin
-                        j <= 0;
-                        if (i == N-2) begin
-                            state <= FIN;
-                        end else begin
-                            i     <= i + 1;
-                            state <= CMP;
-                        end
-                    end else begin
-                        j <= j + 1;
-                    end
-                end
-
-                FIN: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b1;
-                    state <= IDLE;
-                end
-
-                default: state <= IDLE;
-            endcase
-        end
+        if(status[1]) begin
+          if(status[2] || status[3] && status[4]) next_finish = 1;
+          else begin
+            control[8] = 1'b1;
+            control[9] = 1'b1;
+            control[10] = 1'b1;
+          end
+        end else control[11] = 1'b1;
+      end
     end
+  end
+end
 
+endmodule
+
+// ---------------- DATAPATH ----------------
+module bubble_sort_datapath #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input [N*W-1:0] data_in,
+  input [11:0] control,
+  output [4:0] status,
+  output reg [N*W-1:0] data_out);
+reg [W-1:0] mem [0:N-1];
+integer j;
+integer limit;
+integer k;
+reg changed;
+wire greater;
+assign greater = (SIGNED)? $signed(mem[j]) > $signed(mem[j + 1]) : mem[j] > mem[j + 1];
+
+// Status predicates are generated by the datapath, never by the FSM.
+assign status[0] = greater;
+assign status[1] = (j == limit - 1);
+assign status[2] = (limit == 1);
+assign status[3] = (!changed);
+assign status[4] = (!greater);
+
+// Register-transfer operations. Later strobes retain nonblocking
+// assignment priority when the same destination is written twice.
+
+always @(posedge clk) if(!rst_n) begin
+  data_out <= 0;
+  j <= 0;
+  limit <= 0;
+  changed <= 0;
+  for(k=0; k<N; k=k+1) mem[k] <= 0;
+end else begin
+  if(control[0]) begin
+    for(k=0; k<N; k=k+1) mem[k] <= data_in[(k * W) +: W];
+  end
+  if(control[1]) begin
+    j <= 0;
+  end
+  if(control[2]) begin
+    limit <= N - 1;
+  end
+  if(control[3]) begin
+    changed <= 0;
+  end
+  if(control[4]) begin
+    for(k=0; k<N; k=k+1) data_out[(k * W) +: W] <= mem[k];
+  end
+  if(control[5]) begin
+    mem[j] <= mem[j + 1];
+  end
+  if(control[6]) begin
+    mem[j + 1] <= mem[j];
+  end
+  if(control[7]) begin
+    changed <= 1;
+  end
+  if(control[8]) begin
+    limit <= limit - 1;
+  end
+  if(control[9]) begin
+    j <= 0;
+  end
+  if(control[10]) begin
+    changed <= 0;
+  end
+  if(control[11]) begin
+    j <= j + 1;
+  end
+end
+
+endmodule
+
+// ---------------- TOP ----------------
+module bubble_sort #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [N*W-1:0] data_in,
+  output [N*W-1:0] data_out,
+  output busy,
+  output done);
+wire [11:0] control;
+wire [4:0] status;
+bubble_sort_controller #(.W(W), .N(N), .SIGNED(SIGNED)) controller (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(start),
+    .status(status),
+    .control(control),
+    .busy(busy),
+    .done(done)
+);
+bubble_sort_datapath #(.W(W), .N(N), .SIGNED(SIGNED)) datapath (
+    .clk(clk),
+    .rst_n(rst_n),
+    .data_in(data_in),
+    .control(control),
+    .status(status),
+    .data_out(data_out)
+);
 endmodule

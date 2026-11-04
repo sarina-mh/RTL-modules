@@ -1,61 +1,11 @@
-// ============================================================================
-// Module: register_file  (Register file)
-// ----------------------------------------------------------------------------
-// Description:
-//   An array of DEPTH registers, each WIDTH bits wide. It has one write port
-//   and two read ports (asynchronous/combinational read). rst clears all
-//   registers to zero.
-//
-// Parameters:
-//   WIDTH      : Width of each register (default 32)
-//   DEPTH      : Number of registers (default 32)
-//   ADDR_WIDTH : Address width; automatically ceil(log2(DEPTH))
-//
-// Inputs:
-//   clk    : Clock
-//   rst    : Asynchronous reset, active high (clears all registers)
-//   we     : Write enable
-//   waddr  : Write address
-//   wdata  : Write data
-//   raddr1 : Read address, port 1
-//   raddr2 : Read address, port 2
-//
-// Outputs:
-//   rdata1 : Read data, port 1
-//   rdata2 : Read data, port 2
-// ============================================================================
-module register_file #(
-    parameter WIDTH      = 32,
-    parameter DEPTH      = 32,
-    parameter ADDR_WIDTH = $clog2(DEPTH)
-)(
-    input  wire                  clk,
-    input  wire                  rst,
-    input  wire                  we,
-    input  wire [ADDR_WIDTH-1:0] waddr,
-    input  wire [WIDTH-1:0]      wdata,
-    input  wire [ADDR_WIDTH-1:0] raddr1,
-    input  wire [ADDR_WIDTH-1:0] raddr2,
-    output wire [WIDTH-1:0]      rdata1,
-    output wire [WIDTH-1:0]      rdata2
+// Module: register_file. Original group: memory.
+// Two asynchronous read ports, one synchronous write port. Storage is NOT reset.
+module register_file #(parameter W=8, DEPTH=16, A=(DEPTH>1?$clog2(DEPTH):1)) (
+    input clk,we, input [A-1:0] write_address,read_address_a,read_address_b,
+    input [W-1:0] write_data, output [W-1:0] read_data_a,read_data_b
 );
-
-    // Register array
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
-
-    integer i;
-
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            for (i = 0; i < DEPTH; i = i + 1)
-                mem[i] <= {WIDTH{1'b0}};
-        end else if (we) begin
-            mem[waddr] <= wdata;
-        end
-    end
-
-    // Combinational (asynchronous) read
-    assign rdata1 = mem[raddr1];
-    assign rdata2 = mem[raddr2];
-
+    reg [W-1:0] mem[0:DEPTH-1];
+    always @(posedge clk) if(we && write_address<DEPTH) mem[write_address]<=write_data;
+    assign read_data_a=(read_address_a<DEPTH)?mem[read_address_a]:{W{1'b0}};
+    assign read_data_b=(read_address_b<DEPTH)?mem[read_address_b]:{W{1'b0}};
 endmodule

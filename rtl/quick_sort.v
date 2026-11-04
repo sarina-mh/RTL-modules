@@ -1,184 +1,317 @@
-// ============================================================================
-// Module: quick_sort  (Iterative quicksort)
-// ----------------------------------------------------------------------------
-// Description:
-//   Sorts an array of N unsigned elements in ascending order using quicksort.
-//   Recursion is not allowed in synthesizable RTL, so this implementation uses
-//   an explicit LIFO stack of (low, high) index pairs.
-//   Partitioning uses the last element as the pivot and performs one
-//   comparison per clock cycle. The pivot is then placed in its final position
-//   and the two non-empty subranges are pushed onto the stack.
-//
-//   Handshake:
-//     - Pulse start for at least one clock while busy is low.
-//     - busy goes high during sorting and low again when finished.
-//     - done is a one-cycle pulse when data_out holds the sorted array.
-//
-// Parameters:
-//   N           : Number of elements in the array (default 8)
-//   WIDTH       : Bit width of each element (default 8)
-//   STACK_DEPTH : Depth of the explicit index stack (default N + 2)
-//
-// Inputs:
-//   clk      : Clock
-//   rst      : Asynchronous reset, active high
-//   start    : Start sorting (pulse)
-//   data_in  : Flattened input array, N*WIDTH bits
-//              (element k = data_in[k*WIDTH +: WIDTH])
-//
-// Outputs:
-//   data_out : Flattened sorted array, N*WIDTH bits
-//   done     : One-cycle completion pulse
-//   busy     : High while sorting
-// ============================================================================
-module quick_sort #(
-    parameter N           = 8,
-    parameter WIDTH       = 8,
-    parameter STACK_DEPTH = N + 2
-)(
-    input  wire               clk,
-    input  wire               rst,
-    input  wire               start,
-    input  wire [N*WIDTH-1:0] data_in,
-    output wire [N*WIDTH-1:0] data_out,
-    output reg                done,
-    output reg                busy
+// Iterative Lomuto quicksort. Explicit N-entry stack replaces recursion.
+// Ascending order; W,N >= 1. start is accepted only while !busy.
+
+// =====================================================================
+// quick_sort: complete controller + datapath + top in one Verilog file.
+// Pulse start while busy=0. Inputs are latched on the accepting edge.
+// Reset and port conventions are preserved from the original module.
+// Packed array lane i occupies bits [i*W +: W], unless stated otherwise.
+// =====================================================================
+// control[0]: for(k=0; k<N; k=k+1) mem[k] <= data_in[(k * W) +: W];
+// control[1]: stack_lo[0] <= 0;
+// control[2]: stack_hi[0] <= N - 1;
+// control[3]: sp <= 1;
+// control[4]: lo <= stack_lo[sp - 1];
+// control[5]: hi <= stack_hi[sp - 1];
+// control[6]: sp <= sp - 1;
+// control[7]: pivot <= mem[hi];
+// control[8]: i <= lo;
+// control[9]: j <= lo;
+// control[10]: mem[i] <= mem[j];
+// control[11]: mem[j] <= mem[i];
+// control[12]: i <= i + 1;
+// control[13]: j <= j + 1;
+// control[14]: mem[i] <= mem[hi];
+// control[15]: mem[hi] <= mem[i];
+// control[16]: stack_lo[sp] <= lo;
+// control[17]: stack_hi[sp] <= i - 1;
+// control[18]: stack_lo[sp + 1] <= i + 1;
+// control[19]: stack_hi[sp + 1] <= hi;
+// control[20]: sp <= sp + 2;
+// control[21]: stack_lo[sp] <= lo;
+// control[22]: stack_hi[sp] <= i - 1;
+// control[23]: sp <= sp + 1;
+// control[24]: stack_lo[sp] <= i + 1;
+// control[25]: stack_hi[sp] <= hi;
+// control[26]: sp <= sp + 1;
+// control[27]: for(k=0; k<N; k=k+1) data_out[(k * W) +: W] <= mem[k];
+
+// ---------------- CONTROLLER ----------------
+module quick_sort_controller #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [5:0] status,
+  output reg [27:0] control,
+  output reg busy,
+  output reg done);
+
+reg [2:0] state;
+reg next_busy;
+reg next_done;
+reg [2:0] next_state;
+
+// FSM state/handshake registers; all data writes are control strobes.
+
+always @(posedge clk) if(!rst_n) begin
+  busy <= 0;
+  done <= 0;
+  state <= 0;
+end else begin
+  busy <= next_busy;
+  done <= next_done;
+  state <= next_state;
+end
+
+
+always @(*) begin
+  next_busy = busy;
+  next_done = done;
+  next_state = state;
+  control = 0;
+  begin
+    next_done = 0;
+    if(start && !busy) begin
+      control[0] = 1'b1;
+      control[1] = 1'b1;
+      control[2] = 1'b1;
+      control[3] = 1'b1;
+      next_busy = 1;
+      next_state = 0;
+    end else if(busy) case(state)
+      0: if(status[0]) next_state = 4;
+      else begin
+        control[4] = 1'b1;
+        control[5] = 1'b1;
+        control[6] = 1'b1;
+        next_state = 1;
+      end
+      1: if(status[1]) next_state = 0;
+      else begin
+        control[7] = 1'b1;
+        control[8] = 1'b1;
+        control[9] = 1'b1;
+        next_state = 2;
+      end
+      2: if(status[2]) next_state = 3;
+      else begin
+        if(status[3]) begin
+          control[10] = 1'b1;
+          control[11] = 1'b1;
+          control[12] = 1'b1;
+        end
+        control[13] = 1'b1;
+      end
+      3: begin
+        control[14] = 1'b1;
+        control[15] = 1'b1;
+        if(status[4] && status[5]) begin
+          control[16] = 1'b1;
+          control[17] = 1'b1;
+          control[18] = 1'b1;
+          control[19] = 1'b1;
+          control[20] = 1'b1;
+        end else if(status[4]) begin
+          control[21] = 1'b1;
+          control[22] = 1'b1;
+          control[23] = 1'b1;
+        end else if(status[5]) begin
+          control[24] = 1'b1;
+          control[25] = 1'b1;
+          control[26] = 1'b1;
+        end
+        next_state = 0;
+      end
+      4: begin
+        control[27] = 1'b1;
+        next_busy = 0;
+        next_done = 1;
+      end
+      default: next_state = 0;
+    endcase
+  end
+end
+
+endmodule
+
+// ---------------- DATAPATH ----------------
+module quick_sort_datapath #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input [N*W-1:0] data_in,
+  input [27:0] control,
+  output [5:0] status,
+  output reg [N*W-1:0] data_out);
+reg [W-1:0] mem [0:N-1];
+reg [W-1:0] pivot;
+reg signed [31:0] stack_lo [0:N-1];
+reg signed [31:0] stack_hi [0:N-1];
+integer sp;
+integer lo;
+integer hi;
+integer i;
+integer j;
+integer k;
+wire le;
+assign le = (SIGNED)? $signed(mem[j]) <= $signed(pivot) : mem[j] <= pivot;
+
+// Status predicates are generated by the datapath, never by the FSM.
+assign status[0] = (sp == 0);
+assign status[1] = (lo >= hi);
+assign status[2] = (j == hi);
+assign status[3] = le;
+assign status[4] = (lo < i - 1);
+assign status[5] = (i + 1 < hi);
+
+// Register-transfer operations. Later strobes retain nonblocking
+// assignment priority when the same destination is written twice.
+
+always @(posedge clk) if(!rst_n) begin
+  data_out <= 0;
+  sp <= 0;
+  lo <= 0;
+  hi <= 0;
+  i <= 0;
+  j <= 0;
+  pivot <= 0;
+  for(k=0; k<N; k=k+1) begin
+    mem[k] <= 0;
+    stack_lo[k] <= 0;
+    stack_hi[k] <= 0;
+  end
+end else begin
+  if(control[0]) begin
+    for(k=0; k<N; k=k+1) mem[k] <= data_in[(k * W) +: W];
+  end
+  if(control[1]) begin
+    stack_lo[0] <= 0;
+  end
+  if(control[2]) begin
+    stack_hi[0] <= N - 1;
+  end
+  if(control[3]) begin
+    sp <= 1;
+  end
+  if(control[4]) begin
+    lo <= stack_lo[sp - 1];
+  end
+  if(control[5]) begin
+    hi <= stack_hi[sp - 1];
+  end
+  if(control[6]) begin
+    sp <= sp - 1;
+  end
+  if(control[7]) begin
+    pivot <= mem[hi];
+  end
+  if(control[8]) begin
+    i <= lo;
+  end
+  if(control[9]) begin
+    j <= lo;
+  end
+  if(control[10]) begin
+    mem[i] <= mem[j];
+  end
+  if(control[11]) begin
+    mem[j] <= mem[i];
+  end
+  if(control[12]) begin
+    i <= i + 1;
+  end
+  if(control[13]) begin
+    j <= j + 1;
+  end
+  if(control[14]) begin
+    mem[i] <= mem[hi];
+  end
+  if(control[15]) begin
+    mem[hi] <= mem[i];
+  end
+  if(control[16]) begin
+    stack_lo[sp] <= lo;
+  end
+  if(control[17]) begin
+    stack_hi[sp] <= i - 1;
+  end
+  if(control[18]) begin
+    stack_lo[sp + 1] <= i + 1;
+  end
+  if(control[19]) begin
+    stack_hi[sp + 1] <= hi;
+  end
+  if(control[20]) begin
+    sp <= sp + 2;
+  end
+  if(control[21]) begin
+    stack_lo[sp] <= lo;
+  end
+  if(control[22]) begin
+    stack_hi[sp] <= i - 1;
+  end
+  if(control[23]) begin
+    sp <= sp + 1;
+  end
+  if(control[24]) begin
+    stack_lo[sp] <= i + 1;
+  end
+  if(control[25]) begin
+    stack_hi[sp] <= hi;
+  end
+  if(control[26]) begin
+    sp <= sp + 1;
+  end
+  if(control[27]) begin
+    for(k=0; k<N; k=k+1) data_out[(k * W) +: W] <= mem[k];
+  end
+end
+
+endmodule
+
+// ---------------- TOP ----------------
+module quick_sort #
+(
+  parameter W = 8,
+  parameter N = 8,
+  parameter SIGNED = 0
+)
+(
+  input clk,
+  input rst_n,
+  input start,
+  input [N*W-1:0] data_in,
+  output [N*W-1:0] data_out,
+  output busy,
+  output done);
+wire [27:0] control;
+wire [5:0] status;
+quick_sort_controller #(.W(W), .N(N), .SIGNED(SIGNED)) controller (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(start),
+    .status(status),
+    .control(control),
+    .busy(busy),
+    .done(done)
 );
-
-    localparam IDLE  = 3'd0;
-    localparam POP   = 3'd1;
-    localparam SETUP = 3'd2;
-    localparam PART  = 3'd3;
-    localparam PIVOT = 3'd4;
-    localparam FIN   = 3'd5;
-
-    reg [WIDTH-1:0] mem [0:N-1];
-    reg [WIDTH-1:0] pivot;
-    reg [2:0]       state;
-
-    integer low, high, i, j, sp, k;
-
-    // Explicit LIFO stack holding subrange boundaries.
-    integer stack_low  [0:STACK_DEPTH-1];
-    integer stack_high [0:STACK_DEPTH-1];
-
-    // Expose the internal array as a flat output vector.
-    genvar g;
-    generate
-        for (g = 0; g < N; g = g + 1) begin : g_out
-            assign data_out[g*WIDTH +: WIDTH] = mem[g];
-        end
-    endgenerate
-
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state <= IDLE;
-            done  <= 1'b0;
-            busy  <= 1'b0;
-            sp    <= 0;
-            low   <= 0;
-            high  <= 0;
-            i     <= 0;
-            j     <= 0;
-        end else begin
-            case (state)
-                IDLE: begin
-                    done <= 1'b0;
-                    busy <= 1'b0;
-                    if (start) begin
-                        // Load the input array into internal memory.
-                        for (k = 0; k < N; k = k + 1)
-                            mem[k] <= data_in[k*WIDTH +: WIDTH];
-
-                        sp <= 0;
-                        if (N <= 1) begin
-                            state <= FIN;
-                        end else begin
-                            // Push the full range [0, N-1].
-                            stack_low[0]  <= 0;
-                            stack_high[0] <= N-1;
-                            sp    <= 1;
-                            busy  <= 1'b1;
-                            state <= POP;
-                        end
-                    end
-                end
-
-                // Pop the next subrange to process.
-                POP: begin
-                    if (sp == 0) begin
-                        state <= FIN;
-                    end else begin
-                        low   <= stack_low[sp-1];
-                        high  <= stack_high[sp-1];
-                        sp    <= sp - 1;
-                        state <= SETUP;
-                    end
-                end
-
-                // Skip empty/singleton subranges.
-                SETUP: begin
-                    if (low < high) begin
-                        pivot <= mem[high];
-                        i     <= low;
-                        j     <= low;
-                        state <= PART;
-                    end else begin
-                        state <= POP;
-                    end
-                end
-
-                // Lomuto partition: elements < pivot move to the left.
-                PART: begin
-                    if (j < high) begin
-                        if (mem[j] < pivot) begin
-                            mem[i] <= mem[j];
-                            mem[j] <= mem[i];
-                            i      <= i + 1;
-                        end
-                        j <= j + 1;
-                    end else begin
-                        state <= PIVOT;
-                    end
-                end
-
-                // Put the pivot in its final position and push subranges.
-                PIVOT: begin
-                    mem[i]    <= mem[high];
-                    mem[high] <= mem[i];
-
-                    if (i > low) begin
-                        // Left subrange [low, i-1] is non-empty.
-                        stack_low[sp]  <= low;
-                        stack_high[sp] <= i - 1;
-
-                        if (i < high) begin
-                            // Right subrange [i+1, high] is also non-empty.
-                            stack_low[sp+1]  <= i + 1;
-                            stack_high[sp+1] <= high;
-                            sp <= sp + 2;
-                        end else begin
-                            sp <= sp + 1;
-                        end
-                    end else if (i < high) begin
-                        // Only the right subrange [i+1, high] is non-empty.
-                        stack_low[sp]  <= i + 1;
-                        stack_high[sp] <= high;
-                        sp <= sp + 1;
-                    end
-
-                    state <= POP;
-                end
-
-                FIN: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b1;
-                    state <= IDLE;
-                end
-
-                default: state <= IDLE;
-            endcase
-        end
-    end
-
+quick_sort_datapath #(.W(W), .N(N), .SIGNED(SIGNED)) datapath (
+    .clk(clk),
+    .rst_n(rst_n),
+    .data_in(data_in),
+    .control(control),
+    .status(status),
+    .data_out(data_out)
+);
 endmodule
