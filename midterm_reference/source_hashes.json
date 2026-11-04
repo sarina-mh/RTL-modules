@@ -90,6 +90,6 @@
   "tb/tb_exam_algorithms.sv": "5bc248589fb7d2de32efb31c5c37793904407ebf50c20f75852874b345773efb",
   "tb/tb_floating_point.sv": "b31afb53b1330e6ecf562d4bc9f1d9aef6f9fc81703ba9d7a27cbc5867abec22",
   "tb/tb_numerical.sv": "4d1b4fc0b936f2cb9b38b2084dc46609a5371790ed65798a41d440e3e9cb4f00",
-  "tb/tb_sequential.sv": "3f85337112c19d4f63263096eb714342f01bc38322bfdee59549e8e1ce2f0d4b",
+  "tb/tb_sequential.sv": "1c629d4f3e54c7fbb8d638f8ed93dbe751e05f73f8bc39f637416b729e6c9032",
   "tb/tb_sorting.sv": "442e93b5e5322faedc874f417abeac56f66bd13f3cc12b65f4b589db334e07d3"
 }

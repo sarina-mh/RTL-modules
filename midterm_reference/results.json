@@ -2,7 +2,7 @@
   {
     "name": "combinational",
     "passed": true,
-    "seconds": 28.89,
+    "seconds": 27.35,
     "output": [
       "PASS combinational W=1 N=1 cases=4",
       "PASS combinational W=4 N=3 cases=256",
@@ -14,7 +14,7 @@
   {
     "name": "sequential",
     "passed": true,
-    "seconds": 30.47,
+    "seconds": 1.81,
     "output": [
       "PASS sequential/memory/FIFO W=8 depth=8 latency=2 cycles=1800",
       "PASS sequential/memory/FIFO W=8 depth=3 latency=3 cycles=1800",
@@ -28,7 +28,7 @@
   {
     "name": "algorithms",
     "passed": true,
-    "seconds": 33.41,
+    "seconds": 25.72,
     "output": [
       "PASS sorts/extrema/array_sum W=1 N=1 signed=0 cases=200",
       "PASS sorts/extrema/array_sum W=13 N=5 signed=1 cases=200",
@@ -39,7 +39,7 @@
   {
     "name": "floating_point",
     "passed": true,
-    "seconds": 41.84,
+    "seconds": 33.78,
     "output": [
       "PASS floating_point E=3 F=2 vectors=4096 operations=4 stalls=1885",
       "PASS floating_point E=8 F=23 vectors=16676 operations=4 stalls=7671",
@@ -50,7 +50,7 @@
   {
     "name": "sorting",
     "passed": true,
-    "seconds": 40.43,
+    "seconds": 2.25,
     "output": [
       "PASS sorting W=1 N=1 signed=0 arrays=100 methods=18 extra_configs=2",
       "PASS sorting W=4 N=4 signed=1 arrays=100 methods=18 extra_configs=2",
@@ -63,7 +63,7 @@
   {
     "name": "numerical",
     "passed": true,
-    "seconds": 49.98,
+    "seconds": 2.98,
     "output": [
       "PASS DFT/FFT N=1 Q=12 inverse=0 cases=24 max_error_LSB=0 tolerance=12",
       "PASS Fourier series H=0 Q=12 phases=64 max_error_LSB=0",
@@ -81,7 +81,7 @@
   {
     "name": "exam_algorithms",
     "passed": true,
-    "seconds": 30.57,
+    "seconds": 1.78,
     "output": [
       "PASS exam arrays W=1 N=1 signed=0 cases=160 modules=8",
       "PASS exam arrays W=8 N=5 signed=1 cases=160 modules=8",
