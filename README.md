@@ -262,7 +262,7 @@ private to the file unless you intentionally instantiate them.
 | [`alu.v`](rtl/alu.v) | `alu` | 8-operation ALU: add, subtract, AND, OR, XOR, left shift, arithmetic right shift, signed less-than; `zero`/`negative`/`carry`/`overflow` |
 | [`mul.v`](rtl/mul.v) | `mul` | Unsigned or signed multiplier with full-width product |
 | [`divider.v`](rtl/divider.v) | `divider` | Combinational restoring unsigned divider; quotient saturates on divide-by-zero |
-| [`comparator.v`](rtl/comparator.v) | `comparator` | Full relational comparator (`eq`, `ne`, `gt`, `lt`, `ge`, `le`) |
+| [`comparator.v`](rtl/comparator.v) | `comparator` | Relational comparator (`lt`, `eq`, `gt`); `SIGNED` selects signed comparison |
 | [`mux.v`](rtl/mux.v) | `mux` | Parameterized `N`:1 multiplexer with packed inputs |
 | [`mux2.v`](rtl/mux2.v) | `mux2` | 2:1 multiplexer |
 | [`demux.v`](rtl/demux.v) | `demux` | 1:`N` demultiplexer |
@@ -270,7 +270,7 @@ private to the file unless you intentionally instantiate them.
 | [`encoder.v`](rtl/encoder.v) | `encoder` | One-hot encoder; `valid` requires exactly one asserted bit |
 | [`priority_encoder.v`](rtl/priority_encoder.v) | `priority_encoder` | Priority encoder; highest index wins |
 | [`barrel_shifter.v`](rtl/barrel_shifter.v) | `barrel_shifter` | Left/right shifts, arithmetic right shift, and rotate |
-| [`parity.v`](rtl/parity.v) | `parity` | Even/odd parity generator and checker |
+| [`parity.v`](rtl/parity.v) | `parity` | Odd parity generator (XOR reduction) |
 | [`popcount.v`](rtl/popcount.v) | `popcount` | Population count (number of set bits) |
 | [`leading_zero_count.v`](rtl/leading_zero_count.v) | `leading_zero_count` | Leading-zero count |
 
@@ -286,7 +286,7 @@ private to the file unless you intentionally instantiate them.
 | [`modulo_counter.v`](rtl/modulo_counter.v) | `modulo_counter` | Mod-`N` counter with terminal-count output; sync active-low reset |
 | [`saturating_counter.v`](rtl/saturating_counter.v) | `saturating_counter` | Up/down counter that saturates at 0 and all-ones |
 | [`register_en.v`](rtl/register_en.v) | `register_en` | Register with load/enable; priority reset > load > capture > hold |
-| [`shift_register.v`](rtl/shift_register.v) | `shift_register` | Shift register with init, parallel load, and shift enable; sync active-low reset |
+| [`shift_register.v`](rtl/shift_register.v) | `shift_register` | Shift register with enable, parallel load, and direction select; sync active-low reset |
 | [`universal_shift.v`](rtl/universal_shift.v) | `universal_shift` | Legacy universal shift register (hold/left/right/load); async active-high reset |
 | [`pipeline_delay.v`](rtl/pipeline_delay.v) | `pipeline_delay` | `LATENCY >= 1` pipeline; enable stalls data and validity together |
 | [`accumulator.v`](rtl/accumulator.v) | `accumulator` | Accumulator with clear and enable; sync active-low reset |
@@ -588,23 +588,27 @@ Do not compile it together with `rtl/*.v`: module names such as `add_sub`,
 
 ## Interactive HTML Documentation
 
-`index.html` is a self-contained documentation site for the **original
-19-module library**:
+`index.html` is a self-contained interactive documentation site for all 90
+modules in `rtl/`:
 
 - a visual block diagram for every module,
-- an FSM state diagram for every sequential controller,
-- full RTL and testbench source for every module,
+- an FSM/control diagram for every controller or handshake module (a generic
+  handshake state diagram is used where no detailed controller state table is
+  needed),
+- full RTL source for every module, plus the two committed testbenches,
 - an English/Persian UI toggle in the header (code comments stay English),
-- guides for designing datapaths and FSMs.
+- guides for designing datapaths and FSMs,
+- the full module catalog with parameters, ports, reset style, and handshake
+  notes.
 
 Diagrams are rendered locally as SVG, and code is highlighted locally, so the
 page works offline. Web fonts fall back to system fonts when there is no
 network connection.
 
-> **Snapshot note:** `index.html` was generated from the original 19-module
-> sources. The later controller/datapath refactor and the extended 90-file
-> library are documented in this README. Regenerate the HTML from the current
-> `rtl/` sources if you need an exact snapshot of every interface.
+> **Snapshot note:** `index.html` now covers all 90 modules in `rtl/`,
+> including the controller/datapath/top refactor. It is a generated snapshot;
+> regenerate it after RTL changes so the embedded source, ports, and parameters
+> stay in sync.
 
 ---
 
